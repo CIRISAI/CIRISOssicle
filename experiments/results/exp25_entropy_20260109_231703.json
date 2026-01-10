@@ -1,0 +1,97 @@
+{
+  "experiment": "exp25_entropy_strain",
+  "timestamp": "2026-01-09T23:15:59.784942",
+  "conditions": [
+    {
+      "condition": {
+        "name": "baseline",
+        "type": "idle",
+        "intensity": 0
+      },
+      "metrics": {
+        "sharpness": 0.03463932963112263,
+        "phase": -0.0018175446693137632,
+        "contrast": 1.359093731732599,
+        "entropy": 2.9584206696347914,
+        "coherence": 0.9986079086451659,
+        "mean_rho_ab": -0.0001537379300957448,
+        "mean_rho_bc": -0.0017380272463109344,
+        "mean_rho_ac": -0.003560868831534611,
+        "std_rho": 0.186121647181253
+      },
+      "n_samples": 9266
+    },
+    {
+      "condition": {
+        "name": "high_entropy",
+        "type": "entropy_high",
+        "intensity": 0.8
+      },
+      "metrics": {
+        "sharpness": 0.03389087883436995,
+        "phase": -0.0033955926498824922,
+        "contrast": 1.3210556541772611,
+        "entropy": 2.9424466298876766,
+        "coherence": 0.9957378135084483,
+        "mean_rho_ab": 0.0007746945071219665,
+        "mean_rho_bc": -0.009249804986611643,
+        "mean_rho_ac": -0.0017116674701578005,
+        "std_rho": 0.18414408779012895
+      },
+      "n_samples": 4485,
+      "strain": {
+        "delta_entropy": -0.015974039747114865,
+        "delta_sharpness": -0.0007484507967526824,
+        "type": "neutral"
+      }
+    },
+    {
+      "condition": {
+        "name": "low_entropy",
+        "type": "entropy_low",
+        "intensity": 0.8
+      },
+      "metrics": {
+        "sharpness": 0.034227973075226424,
+        "phase": 0.004169286758904595,
+        "contrast": 1.3138167349905299,
+        "entropy": 2.9487896734365378,
+        "coherence": 0.9969153876032033,
+        "mean_rho_ab": 0.00821475515540165,
+        "mean_rho_bc": 0.003560019768417118,
+        "mean_rho_ac": 0.0007330853528950137,
+        "std_rho": 0.1850337480268528
+      },
+      "n_samples": 2270,
+      "strain": {
+        "delta_entropy": -0.009630996198253694,
+        "delta_sharpness": -0.0004113565558962057,
+        "type": "neutral"
+      }
+    },
+    {
+      "condition": {
+        "name": "memory_load",
+        "type": "memory",
+        "intensity": 0.8
+      },
+      "metrics": {
+        "sharpness": 0.03601347606272435,
+        "phase": 0.002616833019491174,
+        "contrast": 1.2127041911979632,
+        "entropy": 2.9806186133005523,
+        "coherence": 0.9938597804351516,
+        "mean_rho_ab": 0.008082153429973614,
+        "mean_rho_bc": -0.005959725633267329,
+        "mean_rho_ac": 0.005728071261767237,
+        "std_rho": 0.18987147852963307
+      },
+      "n_samples": 1261,
+      "strain": {
+        "delta_entropy": 0.02219794366576089,
+        "delta_sharpness": 0.0013741464316017193,
+        "type": "neutral"
+      }
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "experiment": "exp26_ossicle_crypto",
+  "timestamp": "2026-01-09T23:27:59.486988",
+  "sensor": {
+    "type": "ossicle",
+    "n_oscillators": 3,
+    "n_cells": 64,
+    "n_iterations": 500,
+    "memory_kb": 0.75,
+    "twist_deg": 1.1
+  },
+  "tests": [
+    {
+      "name": "baseline",
+      "intensity": 0,
+      "workload_type": null,
+      "mean_corr": -0.002083961103777675,
+      "std_corr": 0.0011630004777179392,
+      "sample_rate": 6745.786929899929,
+      "z_score": 0.0,
+      "delta": 0.0,
+      "n_samples": 53993
+    },
+    {
+      "name": "crypto_30%",
+      "intensity": 0.3,
+      "workload_type": "crypto",
+      "mean_corr": -0.005315616771891625,
+      "std_corr": 0.002545908351606081,
+      "sample_rate": 3638.1921428094142,
+      "z_score": 2.7787223239864276,
+      "delta": -0.00323165566811395,
+      "n_samples": 29117
+    },
+    {
+      "name": "crypto_50%",
+      "intensity": 0.5,
+      "workload_type": "crypto",
+      "mean_corr": -0.00070260168714751,
+      "std_corr": 0.005249008152728859,
+      "sample_rate": 2921.132494835602,
+      "z_score": 1.187754712332726,
+      "delta": 0.0013813594166301648,
+      "n_samples": 23375
+    },
+    {
+      "name": "crypto_70%",
+      "intensity": 0.7,
+      "workload_type": "crypto",
+      "mean_corr": -0.001603679911019647,
+      "std_corr": 0.007322452229033184,
+      "sample_rate": 1972.2070586687205,
+      "z_score": 0.4129672864827327,
+      "delta": 0.0004802811927580278,
+      "n_samples": 15780
+    },
+    {
+      "name": "crypto_90%",
+      "intensity": 0.9,
+      "workload_type": "crypto",
+      "mean_corr": 0.002090191437568574,
+      "std_corr": 0.0050895882340898065,
+      "sample_rate": 1332.3734509404985,
+      "z_score": 3.589123360142131,
+      "delta": 0.0041741525413462495,
+      "n_samples": 10661
+    },
+    {
+      "name": "memory_50%",
+      "intensity": 0.5,
+      "workload_type": "memory",
+      "mean_corr": 0.0015059940935885248,
+      "std_corr": 0.003561537009890394,
+      "sample_rate": 3614.0129823991447,
+      "z_score": 3.0868043113189803,
+      "delta": 0.0035899551973661995,
+      "n_samples": 28920
+    },
+    {
+      "name": "memory_70%",
+      "intensity": 0.7,
+      "workload_type": "memory",
+      "mean_corr": -0.0041285393179010055,
+      "std_corr": 0.003817951884744339,
+      "sample_rate": 1497.472859071051,
+      "z_score": 1.758019947105477,
+      "delta": -0.0020445782141233306,
+      "n_samples": 11982
+    },
+    {
+      "name": "memory_90%",
+      "intensity": 0.9,
+      "workload_type": "memory",
+      "mean_corr": -0.0029851793882137642,
+      "std_corr": 0.014157619075261365,
+      "sample_rate": 435.9168944247474,
+      "z_score": 0.7749078561976952,
+      "delta": -0.0009012182844360893,
+      "n_samples": 3488
+    }
+  ],
+  "baseline": {
+    "mean": -0.002083961103777675,
+    "std": 0.0011630004777179392
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "experiment": "exp16_relative_detection",
+  "timestamp": "2026-01-09T21:34:00.124192",
+  "detection_quality": {
+    "relative": {
+      "tpr": 0.0,
+      "fpr": 0.0,
+      "f1": 0.0
+    },
+    "absolute": {
+      "tpr": 1.0,
+      "fpr": 0.9997282097384541,
+      "f1": 0.0005434328233425912
+    }
+  },
+  "phase_stats": {
+    "idle": {
+      "samples": 47831,
+      "mean_corr": 0.3418701705233816,
+      "std_corr": 0.06303064809749867,
+      "rel_alert_rate": 0.0,
+      "abs_alert_rate": 0.9997282097384541
+    },
+    "attack": {
+      "samples": 23674,
+      "mean_corr": 0.3608209148266074,
+      "std_corr": 0.05647799692873398,
+      "rel_alert_rate": 0.0,
+      "abs_alert_rate": 1.0
+    }
+  }
+}

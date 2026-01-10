@@ -1,0 +1,5 @@
+# Strain Sensor Optimization - Dependencies
+numpy>=1.24.0
+cupy-cuda12x>=12.0.0  # Or cupy-cuda11x for CUDA 11
+scipy>=1.10.0
+matplotlib>=3.7.0

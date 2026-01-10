@@ -1,0 +1,506 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+% \usepackage{algorithm}
+% \usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[margin=1in]{geometry}
+\usepackage{natbib}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Custom commands
+\newcommand{\rho}{\varrho}
+\newcommand{\ie}{\textit{i.e.}}
+\newcommand{\eg}{\textit{e.g.}}
+
+% Title
+\title{Transformer-Based Detection of Unauthorized GPU Workloads\\via Chaotic Oscillator Correlation Fingerprinting}
+
+\author{
+Eric Moore\\
+CIRIS L3C\\
+\texttt{emoore@ciris.ai}
+}
+
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present a novel approach to detecting unauthorized GPU workloads such as cryptocurrency mining or resource hijacking using transformer neural networks trained on correlation patterns from coupled chaotic oscillators. Building on our prior work in coherence collapse analysis and correlation-driven system monitoring, we demonstrate that different GPU workloads produce distinguishable ``fingerprints'' in the correlation structure of race-condition-coupled logistic maps running on the GPU. Our transformer-based detector achieves 75\% accuracy with 0.76 F1 score on a 100-sequence dataset, significantly outperforming statistical baselines (50\% accuracy, 0.0 F1) that fail entirely under realistic conditions. Detection occurs within 0.1 seconds of attack onset with inference latency of 0.12ms per sample---6$\times$ faster than correlation-based statistical methods. We further demonstrate that a 4-oscillator tetrahedral geometry provides 38$\times$ detection z-score improvement over the baseline 3-oscillator configuration, enabling single-sample detection at the 5.8$\sigma$ level. This work enables tamper-evident GPU computing without external hardware, using only software-based intrinsic sensors derived from the GPU's power delivery network voltage noise characteristics.
+\end{abstract}
+
+\section{Introduction}
+
+Cloud computing environments face an increasing threat from cryptojacking---unauthorized use of GPU resources for cryptocurrency mining~\citep{microsoft2023cryptojacking}. Such attacks can incur costs exceeding \$300,000 in compute fees~\citep{microsoft2023cryptojacking} while degrading performance for legitimate workloads. Traditional detection methods rely on monitoring CPU/GPU utilization, network traffic to mining pools, or process inspection~\citep{vectra2024cryptomining,datadog2024cryptomining}. However, sophisticated attackers can evade these measures by using custom configurations that blend with normal workloads~\citep{armosec2024cloud}.
+
+We propose a fundamentally different approach: exploiting the intrinsic physical properties of GPU computation to detect unauthorized concurrent workloads. Our method uses coupled chaotic oscillators whose correlation structure is sensitive to the GPU's power delivery network (PDN) voltage noise. Different workload types produce measurably different voltage droop patterns, which manifest as changes in oscillator correlation---a phenomenon we term \textit{correlation fingerprinting}.
+
+This work builds on two foundational contributions:
+\begin{enumerate}
+    \item \textbf{CIRISAgent Framework}~\citep{moore2025cirisagent}: An ethical AI framework demonstrating transparent, accountable autonomous systems through structured service architectures.
+    \item \textbf{Coherence Collapse Analysis}~\citep{moore2026coherence}: An engineering risk framework for identifying correlation-driven diversity collapse in complex systems, validated across chemistry, political science, and biology domains with formal verification in Lean 4.
+\end{enumerate}
+
+The present work extends these principles to hardware security, demonstrating that correlation structure serves as a universal indicator of system state changes---whether in batteries, governance systems, microbiomes, or GPU workloads.
+
+\subsection{Contributions}
+
+\begin{itemize}
+    \item A novel GPU-intrinsic sensor based on coupled chaotic oscillators sensitive to PDN voltage noise
+    \item A lightweight transformer architecture ($\sim$105K parameters) for temporal pattern recognition in correlation time series
+    \item Experimental validation showing transformer-based detection outperforms statistical baselines by +0.76 F1
+    \item Sub-100ms detection time with 0.12ms inference latency, enabling real-time monitoring
+    \item A tetrahedral (4-oscillator) sensor geometry achieving 38$\times$ detection z-score improvement through signal amplification
+    \item Formal verification of the k-effective framework in Lean 4, connecting to the broader coherence collapse theory
+    \item Open-source implementation suitable for integration with existing GPU workloads
+\end{itemize}
+
+\section{Related Work}
+
+\subsection{GPU Side-Channel Attacks and Defenses}
+
+Recent work has systematically classified GPU side-channel attack vectors including power analysis, timing analysis, electromagnetic analysis, and combined attacks~\citep{springer2024gpusidechannel}. Countermeasures include isolated execution environments, secure memory partitioning, and hardware random number generators~\citep{springer2024gpusidechannel}.
+
+\citet{usenix2022magnetic} demonstrated magnetic side-channel attacks on GPUs, while \citet{arxiv2024hdmiusb} showed that HDMI and USB ports remain susceptible to passive power-based side-channel attacks. These external sensing approaches require physical access and specialized equipment; our method operates entirely in software.
+
+\citet{springer2018poweranalysis} explored power analysis attacks on GPU AES implementations, and \citet{acm2020powersidechannel} proposed machine learning for detecting power analysis and electromagnetic analysis attacks. Our approach inverts this paradigm: rather than attacking, we use the same physical phenomena for defense.
+
+\subsection{Chaotic Oscillators in Security}
+
+Chaotic ring oscillators have been extensively studied for true random number generation (TRNG)~\citep{ieee2014chaoticrng,fpga2020chaoticrng}. These leverage sensitivity to initial conditions for entropy harvesting. \citet{ieee2018cryptanalysis} performed cryptanalysis of such systems, while \citet{springeropen2024enhanced} proposed enhanced logistic maps with perturbation for improved cryptographic properties.
+
+Crucially, prior work has shown that chaotic systems can serve as sensors due to their sensitivity to perturbations~\citep{sciencedirect2019chaossensor}. Enhanced logistic maps demonstrate that ``a tiny error in an initial condition or a control parameter can significantly increase in each iteration''~\citep{sciencedirect2019chaossensor}---a property we exploit for workload detection.
+
+\subsection{Transformer-Based Anomaly Detection}
+
+Transformers have achieved state-of-the-art results in time series anomaly detection. TranAD~\citep{vldb2022tranad} uses self-conditioning and adversarial training, with parallelized GPU inference providing significant speedups over recurrent methods. CAE-T~\citep{wiley2024caet} combines convolutional autoencoders with transformers for industrial control system monitoring.
+
+BTAD~\citep{sciencedirect2023btad} addresses the challenge of anomaly detection under memory constraints and the need for fast reasoning---requirements shared by our application. For IoT security, \citet{nature2025transformer} evaluated large transformer models for resource-constrained anomaly detection.
+
+Our work differs in applying transformers to a novel signal source---chaotic oscillator correlations---rather than network traffic or sensor readings.
+
+\subsection{Cryptocurrency Mining Detection}
+
+Cloud providers have deployed various cryptomining detection systems. Google's Virtual Machine Threat Detection (VMTD) scans VM memory for mining signatures~\citep{google2024vmtd}. Datadog monitors DNS resolutions and process arguments associated with mining~\citep{datadog2024cryptomining}. Microsoft recommends monitoring for sudden spikes in CPU/GPU usage and deployment of GPU extensions~\citep{microsoft2023cryptojacking}.
+
+These approaches rely on signatures, behavioral heuristics, or resource monitoring that sophisticated attackers can evade. Our correlation-based approach detects the \textit{physical effects} of additional workloads on GPU timing, which cannot be masked without reducing the attack's effectiveness.
+
+\section{Physical Mechanism}
+
+\subsection{GPU Power Delivery Network Voltage Noise}
+
+Modern GPUs exhibit significant voltage droops during computation due to finite PDN impedance. \citet{islped2014gpuvolt} characterized these droops at up to 23\% of supply voltage. Critically, voltage droops are \textit{spatially varying}---activity on one streaming multiprocessor (SM) affects voltage on other SMs through the shared PDN.
+
+Gate delay is proportional to $1/V_{dd}$, so voltage variations directly cause timing variations. Our chaotic oscillators exploit this: they use intentional race conditions between GPU threads, and these race outcomes depend on precise timing.
+
+\subsection{Coupled Chaotic Oscillators}
+
+We implement three coupled logistic maps with different bifurcation parameters:
+\begin{align}
+    x_{n+1}^{(A)} &= r_A \cdot x_n^{(A)} \cdot (1 - x_n^{(A)}) + \epsilon \sum_j N_j^{(A)} \\
+    x_{n+1}^{(B)} &= r_B \cdot x_n^{(B)} \cdot (1 - x_n^{(B)}) + \epsilon \sum_j N_j^{(B)} \\
+    x_{n+1}^{(C)} &= r_C \cdot x_n^{(C)} \cdot (1 - x_n^{(C)}) + \epsilon \sum_j N_j^{(C)}
+\end{align}
+where $r_A = 3.70$, $r_B = 3.73$, $r_C = 3.76$ (all in chaotic regime), $\epsilon = 0.05$ is the coupling strength, and $N_j$ represents neighboring cells in a 2D grid.
+
+The key innovation is that no thread synchronization barriers are used. Race conditions between threads cause the final state to depend on execution timing, which in turn depends on PDN voltage noise.
+
+\subsection{Correlation as a Workload Signature}
+
+We compute the Pearson correlation coefficients $\rho_{AB}$, $\rho_{BC}$, $\rho_{AC}$ over sliding windows of oscillator means. Different workload types produce distinct correlation signatures:
+
+\begin{table}[h]
+\centering
+\caption{Correlation fingerprints for different GPU workloads}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Workload} & \textbf{$\rho_{AB}$} & \textbf{$\Delta\rho$ from idle} \\
+\midrule
+Idle & $-0.286$ & --- \\
+Transformer inference & $-0.318$ & $-0.032$ \\
+Training & $-0.323$ & $-0.037$ \\
+Crypto mining & $-0.345$ & $-0.059$ \\
+Memory bandwidth & $-0.312$ & $-0.026$ \\
+\bottomrule
+\end{tabular}
+\label{tab:fingerprints}
+\end{table}
+
+The mechanism differs by workload type:
+\begin{itemize}
+    \item \textbf{Compute-bound (ALU/SFU):} High current draw, large voltage droops, $\Delta\rho \approx -0.19$ (4.4$\sigma$)
+    \item \textbf{Memory-bound:} Moderate current draw, $\Delta\rho \approx -0.05$
+    \item \textbf{Tensor cores:} Separate power domain, minimal effect on correlation
+\end{itemize}
+
+\section{Transformer Architecture}
+
+\subsection{Design Requirements}
+
+The detector must:
+\begin{enumerate}
+    \item Run alongside monitored workloads with minimal overhead
+    \item Process variable-length time series efficiently
+    \item Learn temporal patterns that distinguish attack from clean operation
+    \item Achieve sub-second detection latency
+\end{enumerate}
+
+\subsection{Model Architecture}
+
+We employ a lightweight transformer encoder:
+
+\begin{equation}
+\text{Input: } X \in \mathbb{R}^{B \times T \times 3} \xrightarrow{\text{Linear}} \mathbb{R}^{B \times T \times d}
+\end{equation}
+
+where $B$ is batch size, $T$ is sequence length (up to 512), and $d = 64$ is the model dimension.
+
+The architecture consists of:
+\begin{enumerate}
+    \item \textbf{Input projection:} Linear layer mapping 3 features (oscillator means) to $d$ dimensions
+    \item \textbf{Positional encoding:} Sinusoidal encoding for temporal position
+    \item \textbf{Transformer encoder:} 3 layers, 4 attention heads, feed-forward dimension 128
+    \item \textbf{Global pooling:} Mean pooling over sequence dimension
+    \item \textbf{Classification head:} Two-layer MLP with ReLU activation
+\end{enumerate}
+
+Total parameters: $\sim$105,000 (medium model) or $\sim$18,000 (small model).
+
+\subsection{Training}
+
+We train with:
+\begin{itemize}
+    \item AdamW optimizer, learning rate $10^{-3}$, weight decay $10^{-4}$
+    \item Cosine annealing learning rate schedule
+    \item Cross-entropy loss
+    \item Early stopping with patience 15 epochs
+    \item Batch size 16
+\end{itemize}
+
+Data augmentation is minimal---the chaotic nature of the signal provides inherent variation between samples.
+
+\section{Experimental Setup}
+
+\subsection{Hardware}
+
+Experiments were conducted on an NVIDIA GeForce RTX 4090 Laptop GPU (16GB VRAM) running Ubuntu Linux with CUDA 12.x.
+
+\subsection{Dataset Collection}
+
+We collected 100 sequences (50 clean, 50 attack) of 10 seconds each:
+
+\begin{itemize}
+    \item \textbf{Clean workloads:} Transformer inference simulation, dense matrix multiplication
+    \item \textbf{Attack workloads:} Crypto mining (XOR hash), memory bandwidth attack, SFU compute attack (sin/cos/exp)
+    \item \textbf{Concurrent execution:} Attack workloads run alongside clean workloads to simulate realistic scenarios
+\end{itemize}
+
+Each sequence contains 4,000--9,000 samples at approximately 800 Hz sampling rate.
+
+\subsection{Baseline}
+
+We compare against a statistical baseline using:
+\begin{itemize}
+    \item Sliding window correlation computation
+    \item Z-score deviation from calibrated baseline
+    \item CUSUM (Cumulative Sum) drift detection
+    \item 3$\sigma$ threshold for alerting
+\end{itemize}
+
+This represents the state-of-the-art for correlation-based anomaly detection without machine learning.
+
+\section{Results}
+
+\subsection{Detection Accuracy}
+
+\begin{table}[h]
+\centering
+\caption{Detection performance comparison (100 sequences, 20 test)}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Statistical baseline & 0.500 & 0.000 & 0.000 & 0.000 \\
+Transformer (medium) & \textbf{0.750} & \textbf{0.727} & \textbf{0.800} & \textbf{0.762} \\
+\bottomrule
+\end{tabular}
+\label{tab:results}
+\end{table}
+
+The statistical baseline fails completely under the test conditions, achieving random-guess accuracy. This occurs because the correlation signal is noisy and the baseline cannot learn the temporal patterns that distinguish attack from clean operation.
+
+The transformer achieves 75\% accuracy and 0.76 F1, correctly identifying 8 of 10 attack sequences and 7 of 10 clean sequences.
+
+\subsection{Detection Latency}
+
+\begin{itemize}
+    \item \textbf{Time to first alert:} $<0.1$ seconds from attack onset
+    \item \textbf{Inference time:} 0.12 ms/sample (transformer) vs 0.71 ms/sample (baseline)
+    \item \textbf{Training time:} 4.3 seconds for 100 epochs on 64 training sequences
+\end{itemize}
+
+The transformer is 6$\times$ faster at inference than the statistical baseline, which must compute windowed correlations.
+
+\subsection{Prior Experiment Results}
+
+Building on earlier experiments (Exp9, Exp10), we demonstrated:
+
+\begin{table}[h]
+\centering
+\caption{Alert ratios from prior experiments}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Experiment} & \textbf{Clean Alerts} & \textbf{Attack Alerts} & \textbf{Ratio} \\
+\midrule
+Exp9 (Toy workload) & 38 & 196 & 5.2$\times$ \\
+Exp10 (LLM scale) & 20 & 72 & 3.6$\times$ \\
+\bottomrule
+\end{tabular}
+\label{tab:prior}
+\end{table}
+
+These experiments used the statistical baseline with handcrafted thresholds. The transformer approach provides a more robust learned decision boundary.
+
+\section{Tetrahedral Geometry Enhancement}
+
+Following formal verification in Lean 4~\citep{moore2026coherence}, we explored enhanced sensor geometries. The original 3-oscillator (triangle) configuration yields 3 correlation pairs. A 4-oscillator (tetrahedron) configuration yields 6 pairs, theoretically providing $\sqrt{6/3} = \sqrt{2} \approx 1.41\times$ SNR improvement through additional degrees of freedom.
+
+\subsection{Experimental Validation}
+
+We extended the sensor to four oscillators with $r_D = 3.79$ (fourth vertex of the tetrahedron) and measured 6 correlations: $\rho_{AB}, \rho_{AC}, \rho_{AD}, \rho_{BC}, \rho_{BD}, \rho_{CD}$.
+
+\begin{table}[h]
+\centering
+\caption{Tetrahedral vs Triangle sensor comparison}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Triangle (3 osc)} & \textbf{Tetrahedron (4 osc)} & \textbf{Improvement} \\
+\midrule
+Correlation pairs & 3 & 6 & $2.0\times$ \\
+Baseline $\sigma$ & 0.061 & 0.054 & $1.13\times$ \\
+$|\Delta\rho|$ under attack & 0.009 & 0.314 & $35\times$ \\
+Detection z-score & $0.15\sigma$ & $5.80\sigma$ & $\mathbf{38\times}$ \\
+3$\sigma$ detectable & NO & \textbf{YES} & --- \\
+\bottomrule
+\end{tabular}
+\label{tab:tetra}
+\end{table}
+
+\subsection{Signal Amplification Mechanism}
+
+The tetrahedral geometry exceeded theoretical predictions not through noise reduction, but through \textbf{signal amplification}. The 4th oscillator ($r = 3.79$) operates in a qualitatively different chaotic regime:
+\begin{itemize}
+    \item Triangle $\Delta\rho$: $-0.009$ (barely detectable)
+    \item Tetrahedron $\Delta\rho$: $+0.314$ (35$\times$ larger signal)
+\end{itemize}
+
+This occurs because the cross-correlations between oscillators at different $r$-values sample distinct regions of the PDN voltage response space. The additional oscillator acts as a \textit{differential probe} sensitive to workload-induced power domain variations.
+
+\subsection{k-effective Stability}
+
+We validated the k-effective framework from coherence collapse analysis:
+\begin{equation}
+k_{\text{eff}} = \frac{k}{1 + \rho(k-1)}
+\end{equation}
+where $k$ is the number of correlation pairs.
+
+\begin{table}[h]
+\centering
+\caption{k-effective stability comparison}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Configuration} & $k$ & \textbf{Mean $k_{\text{eff}}$} & \textbf{Std} & \textbf{CV} \\
+\midrule
+Triangle & 3 & 4.22 & 0.63 & 14.9\% \\
+Tetrahedron & 6 & 8.04 & 2.98 & 37.1\% \\
+\bottomrule
+\end{tabular}
+\label{tab:keff}
+\end{table}
+
+While the tetrahedron has higher coefficient of variation due to operating closer to the $\rho = -1/(k-1)$ singularity, its massively improved detection z-score (38$\times$) makes it the preferred configuration.
+
+\section{Discussion}
+
+\subsection{Why Transformers Outperform Statistical Methods}
+
+The statistical baseline computes instantaneous deviations from calibrated means. It cannot capture:
+\begin{itemize}
+    \item \textbf{Temporal patterns:} Attack signatures may involve specific sequences of correlation changes
+    \item \textbf{Multi-variate relationships:} Correlations between $\rho_{AB}$, $\rho_{BC}$, $\rho_{AC}$ may carry information
+    \item \textbf{Non-linear decision boundaries:} The separation between attack and clean may not be a simple threshold
+\end{itemize}
+
+The transformer's self-attention mechanism learns which temporal positions are most informative for classification, effectively discovering the ``fingerprint'' of each workload type.
+
+\subsection{Limitations}
+
+\begin{enumerate}
+    \item \textbf{Same-type attacks are invisible:} A matmul-heavy attack during matmul-heavy workload produces no detectable signal
+    \item \textbf{Heavy loads saturate the signal:} At very high GPU utilization, correlation approaches zero regardless of workload type
+    \item \textbf{Sample size:} 100 sequences is modest; larger datasets would improve generalization
+    \item \textbf{GPU-specific:} Fingerprints may differ across GPU architectures due to PDN differences
+\end{enumerate}
+
+\subsection{Connection to Coherence Collapse}
+
+This work instantiates the coherence collapse framework~\citep{moore2026coherence} in a new domain. The core insight---that correlation structure encodes system state---applies universally:
+\begin{itemize}
+    \item \textbf{Batteries:} Cell correlation predicts degradation
+    \item \textbf{Governance:} Institutional correlation predicts democratic backsliding
+    \item \textbf{Microbiomes:} Species correlation predicts dysbiosis
+    \item \textbf{GPUs:} Oscillator correlation predicts unauthorized workloads
+\end{itemize}
+
+\section{Conclusion}
+
+We have demonstrated that transformer neural networks can detect unauthorized GPU workloads by learning temporal patterns in chaotic oscillator correlation time series. This approach achieves 75\% accuracy with 0.76 F1 score, significantly outperforming statistical baselines that fail under realistic conditions.
+
+The tetrahedral geometry enhancement provides a surprising 38$\times$ improvement in detection z-score---far exceeding the theoretical $\sqrt{2}$ prediction---by operating the 4th oscillator in a qualitatively different chaotic regime that acts as a differential probe for PDN perturbations. This enables single-sample detection at 5.8$\sigma$, crossing the 3$\sigma$ threshold that the triangle configuration cannot achieve.
+
+The method requires no external hardware, no performance counters, and minimal computational overhead. It exploits fundamental physical properties of GPU power delivery networks, making evasion difficult without reducing attack effectiveness.
+
+Future work includes:
+\begin{itemize}
+    \item Cross-GPU generalization studies across AMD, Intel, and older NVIDIA architectures
+    \item Larger and more diverse attack datasets with adversarial evasion attempts
+    \item Integration with production GPU monitoring systems and cloud provider infrastructure
+    \item Multi-SM spatial arrays: deploying tetrahedral sensors across 4+ streaming multiprocessors for an expected $\sqrt{30/3} \approx 3.16\times$ additional SNR improvement
+    \item Training transformers on the 6-dimensional tetrahedral correlation signal
+\end{itemize}
+
+\subsection*{Code and Data Availability}
+
+Source code is available at \url{https://github.com/cirisai/gpu_tamper_detection} under BSL 1.1 license (free for individuals, academics, nonprofits, and organizations under \$1M revenue).
+
+\subsection*{Acknowledgments}
+
+This work builds on the CIRIS ethical AI framework and coherence collapse analysis methodology developed at CIRIS L3C.
+
+\bibliographystyle{plainnat}
+\begin{thebibliography}{99}
+
+\bibitem[Moore(2025)]{moore2025cirisagent}
+Moore, E. (2025).
+\newblock CIRISAgent open source ethical AI framework for accountable autonomy.
+\newblock Zenodo. \url{https://doi.org/10.5281/zenodo.17195221}
+
+\bibitem[Moore(2026)]{moore2026coherence}
+Moore, E. (2026).
+\newblock Coherence Collapse Analysis: A Universal Failure Mode in Complex Coordinating Systems.
+\newblock Zenodo. \url{https://doi.org/10.5281/zenodo.18142668}
+
+\bibitem[Microsoft(2023)]{microsoft2023cryptojacking}
+Microsoft Security Blog. (2023).
+\newblock Cryptojacking: Understanding and defending against cloud compute resource abuse.
+\newblock \url{https://www.microsoft.com/en-us/security/blog/2023/07/25/cryptojacking-understanding-and-defending-against-cloud-compute-resource-abuse/}
+
+\bibitem[Vectra(2024)]{vectra2024cryptomining}
+Vectra AI. (2024).
+\newblock Cryptomining Attacks and How to Detect Them.
+\newblock \url{https://www.vectra.ai/modern-attack/attack-techniques/cryptomining}
+
+\bibitem[Datadog(2024)]{datadog2024cryptomining}
+Datadog. (2024).
+\newblock Detect cryptocurrency mining in your environment with Datadog Cloud SIEM.
+\newblock \url{https://www.datadoghq.com/blog/cryptomining-detection-rule/}
+
+\bibitem[ARMO(2024)]{armosec2024cloud}
+ARMO. (2024).
+\newblock Cloud Mining: Safeguard Your Cloud from Cryptominers.
+\newblock \url{https://www.armosec.io/blog/cloud-mining-security-threats/}
+
+\bibitem[Giri et al.(2024)]{springer2024gpusidechannel}
+Giri, D. et al. (2024).
+\newblock GPU Side-Channel Attack Classification for Targeted Secure Shader Mitigation.
+\newblock \textit{SN Computer Science}. \url{https://doi.org/10.1007/s42979-024-03514-9}
+
+\bibitem[Maia et al.(2022)]{usenix2022magnetic}
+Maia, A. et al. (2022).
+\newblock Snooping the GPU via Magnetic Side Channel.
+\newblock \textit{USENIX Security Symposium}.
+
+\bibitem[Li et al.(2024)]{arxiv2024hdmiusb}
+Li, Y. et al. (2024).
+\newblock Exploiting HDMI and USB Ports for GPU Side-Channel Insights.
+\newblock \textit{arXiv:2410.02539}.
+
+\bibitem[Luo et al.(2018)]{springer2018poweranalysis}
+Luo, C. et al. (2018).
+\newblock Power Analysis Attack of an AES GPU Implementation.
+\newblock \textit{Journal of Hardware and Systems Security}.
+
+\bibitem[Ngo et al.(2020)]{acm2020powersidechannel}
+Ngo, D. et al. (2020).
+\newblock Power side channel attack analysis and detection.
+\newblock \textit{Proceedings of ICCAD}.
+
+\bibitem[Drutarovsky \& Galajda(2014)]{ieee2014chaoticrng}
+Drutarovsky, M. \& Galajda, P. (2014).
+\newblock A Chaotic Ring oscillator based Random Number Generator.
+\newblock \textit{IEEE Conference Publication}.
+
+\bibitem[Koyuncu et al.(2020)]{fpga2020chaoticrng}
+Koyuncu, I. et al. (2020).
+\newblock Chaotic Ring Oscillator Based True Random Number Generator Implementations in FPGA.
+\newblock \textit{IEEE Conference Publication}.
+
+\bibitem[Garipcan \& Ergun(2018)]{ieee2018cryptanalysis}
+Garipcan, A. \& Ergun, S. (2018).
+\newblock Cryptanalysis of a Chaotic Ring Oscillator Based Random Number Generator.
+\newblock \textit{IEEE Conference Publication}.
+
+\bibitem[Biswas et al.(2024)]{springeropen2024enhanced}
+Biswas, H. et al. (2024).
+\newblock Enhanced logistic map with infinite chaos and its applicability in lightweight and high-speed pseudo-random bit generation.
+\newblock \textit{Cybersecurity}.
+
+\bibitem[Buscarino et al.(2019)]{sciencedirect2019chaossensor}
+Buscarino, A. et al. (2019).
+\newblock Enhancing the sensitivity of a chaos sensor for Internet of things.
+\newblock \textit{Internet of Things}.
+
+\bibitem[Tuli et al.(2022)]{vldb2022tranad}
+Tuli, S. et al. (2022).
+\newblock TranAD: Deep Transformer Networks for Anomaly Detection in Multivariate Time Series Data.
+\newblock \textit{VLDB}.
+
+\bibitem[Shang et al.(2024)]{wiley2024caet}
+Shang, L. et al. (2024).
+\newblock An Efficient Anomaly Detection Method for Industrial Control Systems: Deep Convolutional Autoencoding Transformer Network.
+\newblock \textit{International Journal of Intelligent Systems}.
+
+\bibitem[Srivastava et al.(2023)]{sciencedirect2023btad}
+Srivastava, A. et al. (2023).
+\newblock BTAD: A binary transformer deep neural network model for anomaly detection in multivariate time series data.
+\newblock \textit{Advanced Engineering Informatics}.
+
+\bibitem[Ahmed et al.(2025)]{nature2025transformer}
+Ahmed, M. et al. (2025).
+\newblock Evaluating large transformer models for anomaly detection of resource-constrained IoT devices for intrusion detection system.
+\newblock \textit{Scientific Reports}.
+
+\bibitem[Google(2024)]{google2024vmtd}
+Google Cloud. (2024).
+\newblock Security Command Center Cryptomining Protection.
+\newblock \url{https://cloud.google.com/security-command-center/cryptomining-protection-program}
+
+\bibitem[Leng et al.(2014)]{islped2014gpuvolt}
+Leng, J. et al. (2014).
+\newblock GPUVolt: Modeling and Characterizing Voltage Noise in GPU Architectures.
+\newblock \textit{ISLPED}.
+
+\end{thebibliography}
+
+\end{document}

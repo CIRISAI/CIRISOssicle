@@ -1,0 +1,20 @@
+{
+  "experiment": "exp12_formal_validation",
+  "timestamp": "2026-01-09T20:41:15.640142",
+  "test1_noise_floor": {
+    "sigma_ab": 0.09894730127398631,
+    "sigma_bc": 0.1162514661050799,
+    "sigma_ac": 0.10504678371054654,
+    "sigma_mean": 0.10674851702987091,
+    "sigma_assumed": 0.027,
+    "rho_baseline": -0.1821400678602045,
+    "k_eff_baseline": 4.719059712566405,
+    "n_samples": 1208
+  },
+  "test2_k_eff": {
+    "rho_crypto": -0.1651130089661685,
+    "delta_rho": 0.017027058894035996,
+    "k_eff_baseline": 4.719059712566405,
+    "k_eff_crypto": 4.479122928511919,
+    "delta_k_eff": -0.23993678405448549,
+    "prediction_verified": 

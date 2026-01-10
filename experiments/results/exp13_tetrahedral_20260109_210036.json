@@ -1,0 +1,58 @@
+{
+  "experiment": "exp13_tetrahedral_snr",
+  "timestamp": "2026-01-09T20:58:32.181224",
+  "prediction": {
+    "snr_improvement": 1.414
+  },
+  "baseline": {
+    "triangle": {
+      "mean_rho": -0.13586221555749498,
+      "sigma": 0.061066541901084424,
+      "n_samples": 1209
+    },
+    "tetrahedron": {
+      "mean_rho": -0.034003539067075934,
+      "sigma": 0.054192717915752815,
+      "n_samples": 18134
+    },
+    "snr_improvement": 1.126840362500688
+  },
+  "attack": {
+    "triangle": {
+      "mean_rho": -0.1451265024926584,
+      "delta_rho": -0.00926428693516343,
+      "sigma": 0.05154945555579145
+    },
+    "tetrahedron": {
+      "mean_rho": 0.2801693870908569,
+      "delta_rho": 0.31417292615793285,
+      "sigma": 0.06841201481620311
+    },
+    "snr_improvement": 0.7535146522768712
+  },
+  "detection": {
+    "triangle": {
+      "delta_rho": -0.00926428693516343,
+      "z_score": 0.15170806544391724,
+      "detectable": false
+    },
+    "tetrahedron": {
+      "delta_rho": 0.31417292615793285,
+      "z_score": 5.797327357641323,
+      "detectable": true
+    },
+    "z_improvement": 38.21370565024081
+  },
+  "k_eff": {
+    "triangle": {
+      "mean": 4.217344090880345,
+      "std": 0.6269586357551785,
+      "valid_samples": 1209
+    },
+    "tetrahedron": {
+      "mean": 8.035216288290302,
+      "std": 2.977919586358625,
+      "valid_samples": 17992
+    }
+  }
+}

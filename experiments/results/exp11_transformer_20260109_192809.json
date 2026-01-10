@@ -1,0 +1,49 @@
+{
+  "experiment": "exp11_transformer_detector",
+  "timestamp": "2026-01-09T19:28:09.612806",
+  "dataset": {
+    "n_samples": 20,
+    "seq_len": 512,
+    "n_train": 12,
+    "n_val": 4,
+    "n_test": 4
+  },
+  "model": {
+    "size": "small",
+    "n_params": 18338,
+    "config": {
+      "d_model": 32,
+      "n_heads": 2,
+      "n_layers": 2
+    }
+  },
+  "baseline_metrics": {
+    "accuracy": 0.75,
+    "precision": 0.6666666666444444,
+    "recall": 0.99999999995,
+    "f1": 0.79999999992,
+    "confusion_matrix": {
+      "tp": 2,
+      "fp": 1,
+      "fn": 0,
+      "tn": 1
+    }
+  },
+  "transformer_metrics": {
+    "accuracy": 0.25,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "confusion_matrix": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 2,
+      "tn": 1
+    }
+  },
+  "training_time_sec": 0.8559350967407227,
+  "inference_time_ms": {
+    "baseline": 0.2251577377319336,
+    "transformer": 0.04700183868408203
+  }
+}

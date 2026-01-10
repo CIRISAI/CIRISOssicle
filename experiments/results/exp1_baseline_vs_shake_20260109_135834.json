@@ -1,0 +1,51 @@
+{
+  "experiment": "exp1_baseline_vs_shake",
+  "timestamp": "2026-01-09T13:58:34.015333",
+  "phase_duration_sec": 15,
+  "max_delta": 0.009817286475733863,
+  "delta_ab": -0.00639433048344647,
+  "delta_bc": 0.009817286475733863,
+  "delta_ac": -0.001327327853893296,
+  "verdict": "none",
+  "phases": {
+    "baseline_a": {
+      "name": "BASELINE_A",
+      "duration_sec": 15.018728733062744,
+      "n_samples": 11400,
+      "temp_start": 55.0,
+      "temp_end": 60.0,
+      "rho_ab": 0.01465641403056456,
+      "rho_bc": 0.044734648536648575,
+      "rho_ac": 0.008255936775278649,
+      "mean_a_avg": 0.42866137518694525,
+      "mean_b_avg": 0.44330041687216676,
+      "mean_c_avg": 0.4963081585001527
+    },
+    "shake": {
+      "name": "SHAKE",
+      "duration_sec": 15.016797304153442,
+      "n_samples": 11410,
+      "temp_start": 57.0,
+      "temp_end": 61.0,
+      "rho_ab": 0.0005435312246885434,
+      "rho_bc": 0.05134197809145491,
+      "rho_ac": 0.012057986601166621,
+      "mean_a_avg": 0.4286340585071512,
+      "mean_b_avg": 0.44330948539254544,
+      "mean_c_avg": 0.49620784673118257
+    },
+    "baseline_b": {
+      "name": "BASELINE_B",
+      "duration_sec": 15.016260623931885,
+      "n_samples": 11455,
+      "temp_start": 59.0,
+      "temp_end": 62.0,
+      "rho_ab": -0.0007806906142945341,
+      "rho_bc": 0.03831473469479352,
+      "rho_ac": 0.018514692134841186,
+      "mean_a_avg": 0.4286390263510812,
+      "mean_b_avg": 0.4434327040344073,
+      "mean_c_avg": 0.49616835884317356
+    }
+  }
+}

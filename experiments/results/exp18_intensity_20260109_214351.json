@@ -1,0 +1,82 @@
+{
+  "experiment": "exp18_intensity_sweep",
+  "timestamp": "2026-01-09T21:40:25.326174",
+  "baseline": {
+    "samples": 17844,
+    "mean": 0.0797976321709772,
+    "std": 0.06122739647548232,
+    "gpu_util": 82.3103448275862
+  },
+  "attacks": [
+    {
+      "attack_type": "memory",
+      "size": 4096,
+      "samples": 2033,
+      "mean": -0.062449690890931824,
+      "delta": -0.14224732306190901,
+      "z_score": 2.3232626408758663,
+      "gpu_util": 98.78947368421052,
+      "detectable": false
+    },
+    {
+      "attack_type": "matmul",
+      "size": 1024,
+      "samples": 5964,
+      "mean": -0.01810097092459221,
+      "delta": -0.09789860309556941,
+      "z_score": 1.5989346039705954,
+      "gpu_util": 75.42105263157895,
+      "detectable": false
+    },
+    {
+      "attack_type": "matmul",
+      "size": 2048,
+      "samples": 2362,
+      "mean": 0.021687248064289465,
+      "delta": -0.05811038410668773,
+      "z_score": 0.9490912133598254,
+      "gpu_util": 96.57894736842105,
+      "detectable": false
+    },
+    {
+      "attack_type": "crypto_heavy",
+      "size": 8192,
+      "samples": 7952,
+      "mean": 0.12516999065518963,
+      "delta": 0.045372358484212436,
+      "z_score": 0.7410466722731958,
+      "gpu_util": 69.84210526315789,
+      "detectable": false
+    },
+    {
+      "attack_type": "sfu",
+      "size": 2048,
+      "samples": 8428,
+      "mean": 0.03705308841539173,
+      "delta": -0.042744543755585465,
+      "z_score": 0.6981277360517716,
+      "gpu_util": 86.63157894736842,
+      "detectable": false
+    },
+    {
+      "attack_type": "crypto_heavy",
+      "size": 4096,
+      "samples": 8106,
+      "mean": 0.09138018948755307,
+      "delta": 0.01158255731657587,
+      "z_score": 0.1891727880720303,
+      "gpu_util": 73.89473684210526,
+      "detectable": false
+    },
+    {
+      "attack_type": "crypto_heavy",
+      "size": 1024,
+      "samples": 8041,
+      "mean": 0.086029751688811,
+      "delta": 0.006232119517833798,
+      "z_score": 0.10178645290185939,
+      "gpu_util": 71.78947368421052,
+      "detectable": false
+    }
+  ]
+}

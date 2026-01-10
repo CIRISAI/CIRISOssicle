@@ -1,0 +1,91 @@
+{
+  "experiment": "exp17_pair_analysis",
+  "timestamp": "2026-01-09T21:37:25.640597",
+  "pairs": {
+    "ab": {
+      "baseline_mean": 0.05176425668957955,
+      "baseline_std": 0.1015941109112592,
+      "attack_mean": 0.09194550436061423,
+      "delta": 0.04018124767103468,
+      "z_score": 0.3955076457786179,
+      "is_d_pair": false
+    },
+    "ac": {
+      "baseline_mean": 0.4329468064857198,
+      "baseline_std": 0.10274682045765746,
+      "attack_mean": 0.43407587467743647,
+      "delta": 0.0011290681917166534,
+      "z_score": 0.01098883824909273,
+      "is_d_pair": false
+    },
+    "ad": {
+      "baseline_mean": 0.15446541056812074,
+      "baseline_std": 0.11793472138653097,
+      "attack_mean": 0.153026270958091,
+      "delta": -0.0014391396100297549,
+      "z_score": 0.012202849100670625,
+      "is_d_pair": true
+    },
+    "bc": {
+      "baseline_mean": 0.06211568233884888,
+      "baseline_std": 0.12203002708439473,
+      "attack_mean": 0.08781157252823321,
+      "delta": 0.025695890189384334,
+      "z_score": 0.21057022424944882,
+      "is_d_pair": false
+    },
+    "bd": {
+      "baseline_mean": 0.009041988877367608,
+      "baseline_std": 0.13341601928214017,
+      "attack_mean": 0.05636549398884917,
+      "delta": 0.04732350511148156,
+      "z_score": 0.35470631885616394,
+      "is_d_pair": true
+    },
+    "cd": {
+      "baseline_mean": 0.17409701000953223,
+      "baseline_std": 0.16281245408324374,
+      "attack_mean": 0.15475622759387475,
+      "delta": -0.01934078241565748,
+      "z_score": 0.1187917872295545,
+      "is_d_pair": true
+    }
+  },
+  "comparison": {
+    "d_pairs": {
+      "mean_z": 0.161900318395463,
+      "mean_delta": 0.022701142379056266,
+      "best_pair": "bd",
+      "best_z": 0.35470631885616394
+    },
+    "non_d_pairs": {
+      "mean_z": 0.20568890275905316,
+      "mean_delta": 0.022335402017378558,
+      "best_pair": "ab",
+      "best_z": 0.3955076457786179
+    },
+    "improvement": 0.787112557581213
+  },
+  "structure": {
+    "polarization": 0.4239048176083522,
+    "most_negative": "bd",
+    "most_positive": "ac"
+  },
+  "strategy": {
+    "best_pairs": [
+      [
+        "ab",
+        0.3955076457786179
+      ],
+      [
+        "bd",
+        0.35470631885616394
+      ],
+      [
+        "bc",
+        0.21057022424944882
+      ]
+    ],
+    "d_combined_z": 0.06408967142159303
+  }
+}

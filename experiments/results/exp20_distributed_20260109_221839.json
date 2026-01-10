@@ -1,0 +1,61 @@
+{
+  "experiment": "exp20_distributed_twist",
+  "timestamp": "2026-01-09T22:13:19.105941",
+  "configurations": [
+    {
+      "config": {
+        "name": "no_twist",
+        "twist": 0.0
+      },
+      "baseline_mean": -0.004578197665452827,
+      "baseline_std": 0.04185519769960404,
+      "attack_mean": -0.011924737903707558,
+      "delta": -0.0073465402382547305,
+      "z_score": 0.17552276955968013
+    },
+    {
+      "config": {
+        "name": "distributed_0.367",
+        "twist": 0.367
+      },
+      "baseline_mean": -0.01045478833406422,
+      "baseline_std": 0.03770049105629737,
+      "attack_mean": -0.007746320009866912,
+      "delta": 0.0027084683241973082,
+      "z_score": 0.07184172516396763
+    },
+    {
+      "config": {
+        "name": "distributed_1.1",
+        "twist": 1.1
+      },
+      "baseline_mean": -0.006684542198832509,
+      "baseline_std": 0.0396303782481631,
+      "attack_mean": 0.009373719593478632,
+      "delta": 0.01605826179231114,
+      "z_score": 0.4052008197155012
+    },
+    {
+      "config": {
+        "name": "distributed_5.0",
+        "twist": 5.0
+      },
+      "baseline_mean": -0.007719420513589047,
+      "baseline_std": 0.03987167460983815,
+      "attack_mean": -0.014517819837206323,
+      "delta": -0.0067983993236172754,
+      "z_score": 0.17050699207123604
+    },
+    {
+      "config": {
+        "name": "distributed_15.0",
+        "twist": 15.0
+      },
+      "baseline_mean": -0.002879307078714567,
+      "baseline_std": 0.0418296760102082,
+      "attack_mean": -0.0010789169763444695,
+      "delta": 0.0018003901023700977,
+      "z_score": 0.04304097640217508
+    }
+  ]
+}

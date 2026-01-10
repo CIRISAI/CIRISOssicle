@@ -1,0 +1,122 @@
+{
+  "experiment": "exp26_ossicle_crypto",
+  "timestamp": "2026-01-09T23:25:07.024318",
+  "sensor": {
+    "type": "ossicle",
+    "n_oscillators": 3,
+    "n_cells": 64,
+    "n_iterations": 500,
+    "memory_kb": 0.75,
+    "twist_deg": 1.1
+  },
+  "tests": [
+    {
+      "name": "baseline",
+      "intensity": 0,
+      "workload_type": null,
+      "metrics": {
+        "mean_corr": -0.0015857764211430166,
+        "std_corr": 0.1862182030826253,
+        "entropy": 2.9567537952812577,
+        "mean_rho_ab": -0.005103948531446353,
+        "mean_rho_bc": 0.002896309628485789,
+        "mean_rho_ac": -0.002549690360468486
+      },
+      "sample_rate": 6025.458458859022,
+      "z_score": 0.0,
+      "delta_corr": 0.0,
+      "delta_entropy": 0.0,
+      "n_samples": 7228
+    },
+    {
+      "name": "crypto_30%",
+      "intensity": 0.3,
+      "workload_type": "crypto",
+      "metrics": {
+        "mean_corr": -0.0028898920527806794,
+        "std_corr": 0.1858668143402361,
+        "entropy": 2.9581838330745898,
+        "mean_rho_ab": -0.005565512938967575,
+        "mean_rho_bc": -0.0023767059463919464,
+        "mean_rho_ac": -0.0007274572729825176
+      },
+      "sample_rate": 3395.323686693366,
+      "z_score": 0.007003158710315279,
+      "delta_corr": -0.0013041156316376628,
+      "delta_entropy": 0.0014300377933320618,
+      "n_samples": 4072
+    },
+    {
+      "name": "crypto_50%",
+      "intensity": 0.5,
+      "workload_type": "crypto",
+      "metrics": {
+        "mean_corr": 0.000545625261297178,
+        "std_corr": 0.18721517756900263,
+        "entropy": 2.965874255666458,
+        "mean_rho_ab": -0.0020513636102801147,
+        "mean_rho_bc": -0.0011631640362415284,
+        "mean_rho_ac": 0.004851403430413177
+      },
+      "sample_rate": 2846.4258584916497,
+      "z_score": 0.011445721449421978,
+      "delta_corr": 0.0021314016824401944,
+      "delta_entropy": 0.009120460385200424,
+      "n_samples": 3413
+    },
+    {
+      "name": "crypto_70%",
+      "intensity": 0.7,
+      "workload_type": "crypto",
+      "metrics": {
+        "mean_corr": 0.0002422766117018952,
+        "std_corr": 0.1835793816314447,
+        "entropy": 2.9361079543240765,
+        "mean_rho_ab": 0.004973726475901278,
+        "mean_rho_bc": -0.006852735229734781,
+        "mean_rho_ac": 0.0026058385889391887
+      },
+      "sample_rate": 1941.880206966488,
+      "z_score": 0.009816725763657644,
+      "delta_corr": 0.0018280530328449117,
+      "delta_entropy": -0.02064584095718125,
+      "n_samples": 2328
+    },
+    {
+      "name": "crypto_90%",
+      "intensity": 0.9,
+      "workload_type": "crypto",
+      "metrics": {
+        "mean_corr": 0.006099174461952802,
+        "std_corr": 0.1913913787328337,
+        "entropy": 2.9920495340072817,
+        "mean_rho_ab": 0.01014973215876643,
+        "mean_rho_bc": 0.008804698716269033,
+        "mean_rho_ac": -0.0006569074891770538
+      },
+      "sample_rate": 1346.8169034008445,
+      "z_score": 0.04126852666255802,
+      "delta_corr": 0.007684950883095819,
+      "delta_entropy": 0.035295738726023984,
+      "n_samples": 1614
+    },
+    {
+      "name": "memory_70%",
+      "intensity": 0.7,
+      "workload_type": "memory",
+      "metrics": {
+        "mean_corr": 0.0011731138589832974,
+        "std_corr": 0.18700286585400153,
+        "entropy": 2.9659120728285524,
+        "mean_rho_ab": 0.0037763520121042397,
+        "mean_rho_bc": 0.002357574047523414,
+        "mean_rho_ac": -0.002614584482677761
+      },
+      "sample_rate": 1519.3547835885215,
+      "z_score": 0.014815363014864094,
+      "delta_corr": 0.002758890280126314,
+      "delta_entropy": 0.009158277547294702,
+      "n_samples": 1821
+    }
+  ]
+}

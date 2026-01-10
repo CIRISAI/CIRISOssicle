@@ -1,0 +1,64 @@
+{
+  "experiment": "exp19_magic_configuration",
+  "timestamp": "2026-01-09T22:02:33.949141",
+  "configurations": [
+    {
+      "config": {
+        "name": "standard",
+        "r_base": 3.7,
+        "spacing": 0.03,
+        "twist": 0
+      },
+      "baseline_mean": -0.002775300486289835,
+      "baseline_std": 0.041726037893430025,
+      "attack_mean": -0.0022870037175703544,
+      "delta": 0.0004882967687194805,
+      "z_score": 0.011702447493250263,
+      "detectable": false
+    },
+    {
+      "config": {
+        "name": "magic",
+        "r_base": 3.661,
+        "spacing": 0.03,
+        "twist": 90
+      },
+      "baseline_mean": 0.02653337539309192,
+      "baseline_std": 0.04150634780667156,
+      "attack_mean": 0.021642114840710942,
+      "delta": -0.004891260552380979,
+      "z_score": 0.11784367449960052,
+      "detectable": false
+    },
+    {
+      "config": {
+        "name": "quadrature_standard_r",
+        "r_base": 3.7,
+        "spacing": 0.03,
+        "twist": 90
+      },
+      "baseline_mean": 0.016588684154401522,
+      "baseline_std": 0.04308686967843072,
+      "attack_mean": 0.005776736612497295,
+      "delta": -0.010811947541904227,
+      "z_score": 0.2509336973770298,
+      "detectable": false
+    },
+    {
+      "config": {
+        "name": "anti_phase",
+        "r_base": 3.661,
+        "spacing": 0.03,
+        "twist": 180
+      },
+      "baseline_mean": -0.12120434529645456,
+      "baseline_std": 0.031125580529085806,
+      "attack_mean": -0.12165147783142263,
+      "delta": -0.0004471325349680727,
+      "z_score": 0.014365435951104552,
+      "detectable": false
+    }
+  ],
+  "best_config": "quadrature_standard_r",
+  "best_z_score": 0.2509336973770298
+}

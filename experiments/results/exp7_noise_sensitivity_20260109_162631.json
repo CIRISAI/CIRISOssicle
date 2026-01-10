@@ -1,0 +1,23 @@
+{
+  "experiment": "exp7_noise_sensitivity",
+  "timestamp": "2026-01-09T16:26:31.091882",
+  "results": {
+    "noise_floor": {
+      "n_samples": 61147,
+      "n_windows": 486,
+      "duration": 59.97839140892029,
+      "sample_rate": 1019.4838268170687,
+      "rho_mean": -0.29081311043630326,
+      "rho_std": 0.04797021901021138,
+      "rho_min": -0.4082748716999439,
+      "rho_max": -0.12607919937055112,
+      "rho_range": 0.2821956723293928,
+      "autocorr_lag1": 0.7581891232190087,
+      "autocorr_lag5": -0.005546260429057019,
+      "autocorr_lag10": 0.06704745669861378,
+      "drift_slope": 0.0005820473747465706,
+      "drift_r2": 0.043448659103356706,
+      "drift_p_value": 3.5799387375868118e-06,
+      "stationarity_t": -4.87666856020321,
+      "stationarity_p": 1.4659022778253946e-06,
+      "is_stationary": 

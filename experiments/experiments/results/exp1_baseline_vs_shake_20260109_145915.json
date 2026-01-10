@@ -1,0 +1,71 @@
+{
+  "experiment": "exp1_baseline_vs_shake",
+  "timestamp": "2026-01-09T14:59:15.323026",
+  "config": {
+    "phase_duration_sec": 15.0,
+    "n_iterations": 500,
+    "window_size": 1000,
+    "expected_rate_hz": 6600
+  },
+  "F_ratio": 0.8637456465791477,
+  "sigma2_rho_baseline": 0.011809969920873162,
+  "sigma2_rho_shake": 0.010200810105384876,
+  "max_delta_rho": 0.008513385388855706,
+  "delta_rho_ab": -0.0026083579009836544,
+  "delta_rho_bc": -0.0015163203612089948,
+  "delta_rho_ac": -0.008513385388855706,
+  "verdict": "none",
+  "phases": {
+    "baseline_a": {
+      "name": "BASELINE_A",
+      "duration_sec": 15.015429973602295,
+      "n_samples": 97164,
+      "temp_start": 53.0,
+      "temp_end": 58.0,
+      "rho_ab_mean": 0.16176567909015163,
+      "rho_bc_mean": 0.20655351394695654,
+      "rho_ac_mean": 0.020979415041800564,
+      "rho_ab_var": 0.0020253560629538317,
+      "rho_bc_var": 0.004038678397518466,
+      "rho_ac_var": 0.004158338836151852,
+      "rho_var_total": 0.010222373296624149,
+      "mean_a_avg": 0.420087217540193,
+      "mean_b_avg": 0.4327318485427362,
+      "mean_c_avg": 0.462511551297772
+    },
+    "shake": {
+      "name": "SHAKE",
+      "duration_sec": 15.017581224441528,
+      "n_samples": 96639,
+      "temp_start": 55.0,
+      "temp_end": 58.0,
+      "rho_ab_mean": 0.17747328886808808,
+      "rho_bc_mean": 0.19705560701809086,
+      "rho_ac_mean": 0.01130295397051169,
+      "rho_ab_var": 0.002176860188915622,
+      "rho_bc_var": 0.0035797602613235877,
+      "rho_ac_var": 0.0044441896551456654,
+      "rho_var_total": 0.010200810105384876,
+      "mean_a_avg": 0.42010055360065385,
+      "mean_b_avg": 0.43270863020117484,
+      "mean_c_avg": 0.4625048210556267
+    },
+    "baseline_b": {
+      "name": "BASELINE_B",
+      "duration_sec": 15.015694618225098,
+      "n_samples": 97138,
+      "temp_start": 56.0,
+      "temp_end": 59.0,
+      "rho_ab_mean": 0.19839761444799184,
+      "rho_bc_mean": 0.19059034081164314,
+      "rho_ac_mean": 0.018653263676934227,
+      "rho_ab_var": 0.0021409654595191934,
+      "rho_bc_var": 0.005154321630633951,
+      "rho_ac_var": 0.006102279454969031,
+      "rho_var_total": 0.013397566545122176,
+      "mean_a_avg": 0.4201261668212477,
+      "mean_b_avg": 0.4327497317144169,
+      "mean_c_avg": 0.462397381504398
+    }
+  }
+}

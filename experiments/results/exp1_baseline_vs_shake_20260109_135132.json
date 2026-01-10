@@ -1,0 +1,53 @@
+{
+  "experiment": "exp1_baseline_vs_shake",
+  "timestamp": "2026-01-09T13:51:32.220787",
+  "phase_duration_sec": 60.0,
+  "F_ratio": 1.0003335329006495,
+  "baseline_return_ratio": 1.006985484073643,
+  "thermal_drift": 9.0,
+  "phases": {
+    "baseline_a": {
+      "name": "BASELINE_A",
+      "duration_sec": 60.02091717720032,
+      "n_samples": 31720,
+      "temp_start": 55.0,
+      "temp_end": 64.0,
+      "mean_ab": 0.021393548499441535,
+      "mean_bc": 0.10952647219402999,
+      "mean_ac": 0.007592993894422393,
+      "var_ab": 0.0015882295403387046,
+      "var_bc": 0.0013658373221218589,
+      "var_ac": 0.0014687050588699057,
+      "var_total": 0.004422771921330469
+    },
+    "shake": {
+      "name": "SHAKE",
+      "duration_sec": 60.02824354171753,
+      "n_samples": 31800,
+      "temp_start": 63.0,
+      "temp_end": 61.0,
+      "mean_ab": 0.02122196165098116,
+      "mean_bc": 0.10969366082180176,
+      "mean_ac": 0.007326662604921151,
+      "var_ab": 0.0016306590779135374,
+      "var_bc": 0.001354279223666969,
+      "var_ac": 0.0014547616637894257,
+      "var_total": 0.0044396999653699325
+    },
+    "baseline_b": {
+      "name": "BASELINE_B",
+      "duration_sec": 60.019073724746704,
+      "n_samples": 31900,
+      "temp_start": 58.0,
+      "temp_end": 64.0,
+      "mean_ab": 0.021479558431865914,
+      "mean_bc": 0.10997970677524138,
+      "mean_ac": 0.007787902051995628,
+      "var_ab": 0.0016162819202123896,
+      "var_bc": 0.0013488315675431615,
+      "var_ac": 0.0014885537370912748,
+      "var_total": 0.004453667224846827
+    }
+  },
+  "verdict": "none"
+}

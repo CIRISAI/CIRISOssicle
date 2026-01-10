@@ -1,0 +1,17 @@
+{
+  "experiment": "exp10_llm_tamper",
+  "timestamp": "2026-01-09T18:39:05.864548",
+  "scale": {
+    "hidden_size": 4096,
+    "num_heads": 32,
+    "seq_len": 1024,
+    "model_type": "8B_simulation"
+  },
+  "baseline_mean": -0.0013874529279243595,
+  "baseline_std": 0.06886886297456872,
+  "clean_alerts": 36,
+  "attack_alerts": 40,
+  "total_tokens": 1789,
+  "attack_ops": 5186,
+  "success": false
+}
