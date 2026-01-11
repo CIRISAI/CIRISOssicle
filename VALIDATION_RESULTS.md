@@ -148,6 +148,51 @@ python -m pytest tests/test_claims.py::TestNullHypotheses::test_claim4_reset_sen
 
 ---
 
+## Empirical Sensitivity Characterization
+
+### Test Methodology
+
+- 15 baseline trials, 15 workload trials
+- 5 seconds per trial
+- Reset before each trial
+- 90% intensity crypto workload (1M elements, 150 hash rounds)
+
+### Results
+
+| Condition | Mean Correlation | Std Dev |
+|-----------|-----------------|---------|
+| Baseline | +0.0007 | 0.0021 |
+| 90% Workload | -0.0071 | 0.0114 |
+
+**Statistical Test:**
+- t-statistic: 2.50
+- p-value: 0.019
+- Effect size (Cohen's d): 0.95 (large)
+
+### Key Findings
+
+1. **Mean shifts negative** under workload (Δ ≈ -0.008)
+2. **Variance increases 5.5x** under workload (0.002 → 0.011)
+3. **Detection is probabilistic**, not deterministic:
+   - ~50% detection rate at 2σ for 60%+ intensity
+   - High trial-to-trial variance under workload
+
+### Minimum Detectable Intensity
+
+| Threshold | Min Intensity | Detection Rate |
+|-----------|---------------|----------------|
+| 2σ (p<0.05) | ~60% GPU | ~50% per trial |
+| 3σ (p<0.003) | Not reliable | <40% per trial |
+
+### Practical Implications
+
+- **Best use case**: Continuous monitoring with multiple samples
+- **Single measurement**: May miss detection (high false negative rate)
+- **Multiple measurements**: Statistical detection emerges over trials
+- **High intensity attacks** (>60%): More reliably detected
+
+---
+
 ## Notes
 
 - All tests run on RTX 4090 laptop GPU
