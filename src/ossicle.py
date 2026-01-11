@@ -10,6 +10,12 @@ VALIDATED FEATURES (January 2026, RTX 4090):
 2. Reset strategy - 7x sensitivity improvement with periodic resets (p=0.032)
 3. Bounded noise floor - σ ≈ 0.003
 
+EMPIRICAL SENSITIVITY (validated):
+- Minimum detectable: ~60% GPU intensity at 2σ with ~50% per-trial detection
+- Mean shifts negative under workload (Δ ≈ -0.008)
+- Variance increases 5.5x under workload (key detection signal!)
+- Detection is PROBABILISTIC - use multi-trial accumulation for reliability
+
 See VALIDATION_RESULTS.md for full null hypothesis test methodology.
 
 Author: CIRIS L3C (Eric Moore)
@@ -19,12 +25,16 @@ License: BSL 1.1
 import numpy as np
 import cupy as cp
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
+from collections import deque
 
 
-# Validated noise floor from testing
+# Validated parameters from testing
 VALIDATED_NOISE_FLOOR = 0.003
+VALIDATED_BASELINE_MEAN = 0.0007
+VALIDATED_BASELINE_STD = 0.0021
+VALIDATED_WORKLOAD_VARIANCE_RATIO = 5.5  # Variance increases 5.5x under load
 
 
 @dataclass
@@ -53,7 +63,12 @@ class OssicleConfig:
 
 @dataclass
 class Detection:
-    """Detection result from the sensor."""
+    """
+    Detection result from the sensor.
+
+    NOTE: Single-trial detection is probabilistic (~50% rate at 2σ for 60%+ intensity).
+    For reliable detection, use StatisticalDetector which accumulates evidence.
+    """
     timestamp: float
     mean_correlation: float
     z_score: float
@@ -69,6 +84,44 @@ class Detection:
     rho_ab: float
     rho_bc: float
     rho_ac: float
+
+    # Variance-based detection (validated: 5.5x increase under load)
+    correlation_std: float = 0.0
+    variance_ratio: float = 1.0
+    variance_anomaly: bool = False
+
+
+@dataclass
+class StatisticalResult:
+    """
+    Result from multi-trial statistical detection.
+
+    More reliable than single-trial Detection due to evidence accumulation.
+    """
+    timestamp: float
+    n_trials: int
+
+    # Mean-based detection
+    mean_correlation: float
+    mean_z_score: float
+    mean_detected: bool
+
+    # Variance-based detection (often more sensitive)
+    variance: float
+    variance_ratio: float
+    variance_z_score: float
+    variance_detected: bool
+
+    # Combined detection (either signal)
+    detected: bool
+    confidence: float  # 0-1 based on evidence strength
+
+    # T-test against baseline
+    t_statistic: float
+    p_value: float
+
+    # Individual trial results
+    trial_correlations: List[float] = field(default_factory=list)
 
 
 class OssicleKernel:
@@ -186,30 +239,42 @@ class OssicleDetector:
     """
     Tamper detection using the ossicle sensor.
 
+    IMPORTANT: Detection is PROBABILISTIC (~50% per trial at 2σ).
+    For reliable detection, use measure_statistical() with multiple trials.
+
     Validated methodology:
     1. Reset oscillator states before each measurement trial
     2. Collect samples for several seconds
     3. Compute mean correlation across oscillator pairs
-    4. Compare to baseline using z-score
-    5. Detect if |z| > threshold
+    4. Compare to baseline using z-score AND variance ratio
+    5. Detect if |z| > threshold OR variance ratio > 3x
 
-    Usage:
+    Usage (single trial - less reliable):
         detector = OssicleDetector()
-        baseline = detector.calibrate(duration=30)
-
-        # Later, to detect tampering:
+        detector.calibrate(duration=30)
         result = detector.measure(duration=5)
         if result.detected:
             print(f"TAMPER DETECTED: z={result.z_score:.2f}")
+
+    Usage (multi-trial - recommended):
+        detector = OssicleDetector()
+        detector.calibrate(duration=30)
+        result = detector.measure_statistical(n_trials=5, duration=3)
+        if result.detected:
+            print(f"TAMPER DETECTED: p={result.p_value:.4f}")
     """
 
     def __init__(self, config: OssicleConfig = None):
         self.config = config or OssicleConfig()
         self.kernel = OssicleKernel(self.config)
 
-        # Baseline statistics
+        # Baseline statistics (mean-based)
         self.baseline_mean: Optional[float] = None
         self.baseline_std: Optional[float] = None
+
+        # Baseline variance statistics (validated: variance increases 5.5x under load)
+        self.baseline_var: Optional[float] = None
+        self.baseline_correlations: List[float] = []
 
     def _collect_samples(self, duration: float) -> Tuple[List[float], List[float], List[float]]:
         """Collect oscillator samples for specified duration."""
@@ -253,7 +318,7 @@ class OssicleDetector:
             n_trials: Number of trials (more = better statistics)
 
         Returns:
-            Dict with baseline_mean, baseline_std, n_trials
+            Dict with baseline statistics including variance
         """
         print(f"Calibrating baseline ({n_trials} trials, {duration}s each)...")
         print("Keep system IDLE during calibration.")
@@ -272,35 +337,46 @@ class OssicleDetector:
             mean_corr = (rho_ab + rho_bc + rho_ac) / 3
             correlations.append(mean_corr)
 
-            print(f"  Trial {i+1}/{n_trials}: corr = {mean_corr:.6f}")
+            print(f"  Trial {i+1}/{n_trials}: corr = {mean_corr:+.6f}")
 
+        self.baseline_correlations = correlations.copy()
         self.baseline_mean = float(np.mean(correlations))
         self.baseline_std = float(np.std(correlations))
+        self.baseline_var = float(np.var(correlations))
 
         # Use validated noise floor if measured std is too small
         if self.baseline_std < VALIDATED_NOISE_FLOOR / 2:
             self.baseline_std = VALIDATED_NOISE_FLOOR
+            self.baseline_var = VALIDATED_NOISE_FLOOR ** 2
 
         print(f"\nCalibration complete:")
-        print(f"  Mean: {self.baseline_mean:.6f}")
+        print(f"  Mean: {self.baseline_mean:+.6f}")
         print(f"  Std:  {self.baseline_std:.6f}")
+        print(f"  Var:  {self.baseline_var:.8f}")
         print(f"  2σ threshold: ±{2*self.baseline_std:.6f}")
         print(f"  3σ threshold: ±{3*self.baseline_std:.6f}")
+        print(f"  Variance anomaly threshold: {3*self.baseline_var:.8f} (3x baseline)")
 
         return {
             'baseline_mean': self.baseline_mean,
             'baseline_std': self.baseline_std,
-            'n_trials': n_trials
+            'baseline_var': self.baseline_var,
+            'n_trials': n_trials,
+            'correlations': correlations
         }
 
-    def set_baseline(self, mean: float, std: float):
+    def set_baseline(self, mean: float, std: float, var: float = None):
         """Set baseline statistics directly."""
         self.baseline_mean = mean
         self.baseline_std = std if std > 0 else VALIDATED_NOISE_FLOOR
+        self.baseline_var = var if var else self.baseline_std ** 2
 
     def measure(self, duration: float = 5.0) -> Detection:
         """
-        Take a measurement and check for tampering.
+        Take a single measurement and check for tampering.
+
+        NOTE: Single-trial detection is probabilistic (~50% rate at 2σ).
+        For reliable detection, use measure_statistical() instead.
 
         IMPORTANT: Resets oscillator state before measuring (validated 7x improvement).
 
@@ -322,12 +398,21 @@ class OssicleDetector:
         # Compute correlations
         rho_ab, rho_bc, rho_ac = self._compute_correlations(ha, hb, hc)
         mean_corr = (rho_ab + rho_bc + rho_ac) / 3
+        corr_std = np.std([rho_ab, rho_bc, rho_ac])
 
-        # Compute z-score
+        # Compute z-score (mean-based)
         z_score = abs(mean_corr - self.baseline_mean) / self.baseline_std
 
-        # Detection
-        detected = z_score > self.config.z_threshold
+        # Variance-based anomaly detection (validated: 5.5x increase under load)
+        variance_ratio = 1.0
+        variance_anomaly = False
+        if self.baseline_var and self.baseline_var > 0:
+            current_var = corr_std ** 2
+            variance_ratio = current_var / self.baseline_var
+            variance_anomaly = variance_ratio > 3.0  # 3x baseline is anomalous
+
+        # Detection (either mean shift OR variance anomaly)
+        detected = z_score > self.config.z_threshold or variance_anomaly
         strong = z_score > self.config.z_strong
 
         return Detection(
@@ -341,12 +426,99 @@ class OssicleDetector:
             mean_c=np.mean(hc),
             rho_ab=rho_ab,
             rho_bc=rho_bc,
-            rho_ac=rho_ac
+            rho_ac=rho_ac,
+            correlation_std=corr_std,
+            variance_ratio=variance_ratio,
+            variance_anomaly=variance_anomaly
+        )
+
+    def measure_statistical(self, n_trials: int = 5, duration: float = 3.0) -> StatisticalResult:
+        """
+        Multi-trial statistical detection (RECOMMENDED).
+
+        More reliable than single measure() due to evidence accumulation.
+        Uses t-test to compare trial correlations against baseline.
+
+        Args:
+            n_trials: Number of trials (more = higher confidence)
+            duration: Duration per trial in seconds
+
+        Returns:
+            StatisticalResult with p-value and detection confidence
+        """
+        if self.baseline_mean is None:
+            raise RuntimeError("No baseline. Call calibrate() first.")
+
+        correlations = []
+
+        for i in range(n_trials):
+            # Reset before each trial (validated 7x improvement)
+            self.kernel.reset()
+
+            # Collect samples
+            ha, hb, hc = self._collect_samples(duration)
+
+            # Compute mean correlation
+            rho_ab, rho_bc, rho_ac = self._compute_correlations(ha, hb, hc)
+            mean_corr = (rho_ab + rho_bc + rho_ac) / 3
+            correlations.append(mean_corr)
+
+        # Compute statistics
+        trial_mean = float(np.mean(correlations))
+        trial_var = float(np.var(correlations))
+        trial_std = float(np.std(correlations))
+
+        # Mean-based z-score
+        mean_z = abs(trial_mean - self.baseline_mean) / self.baseline_std if self.baseline_std > 0 else 0
+        mean_detected = mean_z > self.config.z_threshold
+
+        # Variance-based detection (validated: 5.5x increase under load)
+        variance_ratio = trial_var / self.baseline_var if self.baseline_var and self.baseline_var > 0 else 1.0
+        variance_z = (variance_ratio - 1) / 0.5  # Approximate z-score for variance
+        variance_detected = variance_ratio > 3.0
+
+        # T-test against baseline (if we have baseline correlations)
+        if len(self.baseline_correlations) >= 2:
+            from scipy import stats
+            t_stat, p_value = stats.ttest_ind(correlations, self.baseline_correlations)
+            t_stat = float(t_stat)
+            p_value = float(p_value)
+        else:
+            # One-sample t-test against baseline mean
+            t_stat = (trial_mean - self.baseline_mean) / (trial_std / np.sqrt(n_trials)) if trial_std > 0 else 0
+            # Approximate p-value
+            from scipy import stats
+            p_value = float(2 * (1 - stats.t.cdf(abs(t_stat), df=n_trials-1)))
+
+        # Combined detection
+        detected = mean_detected or variance_detected or p_value < 0.05
+
+        # Confidence based on evidence strength
+        confidence = min(1.0, max(mean_z / 3.0, variance_ratio / 5.5, 1 - p_value))
+
+        return StatisticalResult(
+            timestamp=time.time(),
+            n_trials=n_trials,
+            mean_correlation=trial_mean,
+            mean_z_score=mean_z,
+            mean_detected=mean_detected,
+            variance=trial_var,
+            variance_ratio=variance_ratio,
+            variance_z_score=variance_z,
+            variance_detected=variance_detected,
+            detected=detected,
+            confidence=confidence,
+            t_statistic=t_stat,
+            p_value=p_value,
+            trial_correlations=correlations
         )
 
     def monitor(self, interval: float = 5.0, callback=None):
         """
-        Continuous monitoring mode.
+        Continuous monitoring mode (single-trial).
+
+        NOTE: Each measurement is independent. For accumulated evidence,
+        use monitor_cusum() instead.
 
         Args:
             interval: Measurement interval in seconds
@@ -362,13 +534,18 @@ class OssicleDetector:
             while True:
                 result = self.measure(interval)
 
-                status = "DETECTED!" if result.detected else "OK"
+                status = "OK"
+                if result.variance_anomaly:
+                    status = "VAR ANOMALY!"
+                if result.detected:
+                    status = "DETECTED!"
                 if result.strong:
-                    status = "STRONG DETECTION!"
+                    status = "STRONG!"
 
                 print(f"[{time.strftime('%H:%M:%S')}] "
                       f"corr={result.mean_correlation:+.6f} "
                       f"z={result.z_score:.2f}σ "
+                      f"var={result.variance_ratio:.1f}x "
                       f"{status}")
 
                 if callback:
@@ -376,6 +553,100 @@ class OssicleDetector:
 
         except KeyboardInterrupt:
             print("\nMonitoring stopped.")
+
+    def monitor_cusum(self, interval: float = 3.0, threshold: float = 5.0,
+                      window: int = 10, callback=None):
+        """
+        CUSUM-based continuous monitoring (RECOMMENDED).
+
+        Accumulates evidence over multiple measurements for reliable detection.
+        Uses Cumulative Sum (CUSUM) algorithm to detect persistent shifts.
+
+        Args:
+            interval: Measurement interval in seconds
+            threshold: CUSUM threshold for detection (higher = fewer false positives)
+            window: Window size for rolling statistics
+            callback: Optional callback(dict) for each measurement
+        """
+        if self.baseline_mean is None:
+            raise RuntimeError("No baseline. Call calibrate() first.")
+
+        print(f"CUSUM Monitoring (interval={interval}s, threshold={threshold})...")
+        print("Press Ctrl+C to stop.\n")
+
+        # CUSUM accumulators
+        cusum_pos = 0.0  # Cumulative sum for positive shift
+        cusum_neg = 0.0  # Cumulative sum for negative shift
+        k = self.baseline_std  # Slack parameter
+
+        # Rolling window for variance detection
+        recent_correlations = deque(maxlen=window)
+
+        detection_count = 0
+        total_count = 0
+
+        try:
+            while True:
+                result = self.measure(interval)
+                total_count += 1
+
+                # Update CUSUM
+                diff = result.mean_correlation - self.baseline_mean
+                cusum_pos = max(0, cusum_pos + diff - k)
+                cusum_neg = max(0, cusum_neg - diff - k)
+                cusum_max = max(cusum_pos, cusum_neg)
+
+                # Rolling variance
+                recent_correlations.append(result.mean_correlation)
+                if len(recent_correlations) >= 3:
+                    rolling_var = np.var(list(recent_correlations))
+                    rolling_var_ratio = rolling_var / self.baseline_var if self.baseline_var else 1.0
+                else:
+                    rolling_var_ratio = 1.0
+
+                # Detection logic
+                cusum_detected = cusum_max > threshold
+                variance_detected = rolling_var_ratio > 3.0
+
+                detected = cusum_detected or variance_detected
+                if detected:
+                    detection_count += 1
+
+                # Status
+                status = "OK"
+                if variance_detected:
+                    status = "VAR!"
+                if cusum_detected:
+                    status = "CUSUM!"
+                if cusum_detected and variance_detected:
+                    status = "STRONG!"
+
+                print(f"[{time.strftime('%H:%M:%S')}] "
+                      f"corr={result.mean_correlation:+.6f} "
+                      f"cusum={cusum_max:.2f} "
+                      f"var={rolling_var_ratio:.1f}x "
+                      f"det={detection_count}/{total_count} "
+                      f"{status}")
+
+                # Reset CUSUM if threshold exceeded (to detect new events)
+                if cusum_detected:
+                    cusum_pos = 0.0
+                    cusum_neg = 0.0
+
+                if callback:
+                    callback({
+                        'result': result,
+                        'cusum': cusum_max,
+                        'cusum_detected': cusum_detected,
+                        'variance_ratio': rolling_var_ratio,
+                        'variance_detected': variance_detected,
+                        'detected': detected,
+                        'detection_rate': detection_count / total_count
+                    })
+
+        except KeyboardInterrupt:
+            print(f"\nMonitoring stopped. Detection rate: {detection_count}/{total_count}"
+                  f" ({100*detection_count/total_count:.1f}%)" if total_count > 0 else "")
 
 
 def demo():
@@ -399,15 +670,32 @@ def demo():
     detector.calibrate(duration=3.0, n_trials=5)
     print()
 
-    # Take a few measurements
-    print("Taking measurements...")
+    # Single-trial measurements (probabilistic)
+    print("Single-trial measurements (probabilistic, ~50% detection rate):")
     for i in range(3):
         result = detector.measure(duration=3.0)
         status = "DETECTED" if result.detected else "clean"
-        print(f"  Measurement {i+1}: z={result.z_score:.2f}σ ({status})")
+        print(f"  Trial {i+1}: z={result.z_score:.2f}σ, var={result.variance_ratio:.1f}x ({status})")
+
+    print()
+
+    # Multi-trial statistical detection (recommended)
+    print("Multi-trial statistical detection (recommended):")
+    result = detector.measure_statistical(n_trials=5, duration=2.0)
+    print(f"  Mean: {result.mean_correlation:+.6f}")
+    print(f"  Mean z-score: {result.mean_z_score:.2f}σ")
+    print(f"  Variance ratio: {result.variance_ratio:.1f}x")
+    print(f"  T-statistic: {result.t_statistic:.2f}")
+    print(f"  P-value: {result.p_value:.4f}")
+    print(f"  Confidence: {result.confidence:.1%}")
+    print(f"  Detected: {'YES' if result.detected else 'NO'}")
 
     print()
     print("Demo complete.")
+    print()
+    print("For continuous monitoring, use:")
+    print("  detector.monitor()        # Single-trial mode")
+    print("  detector.monitor_cusum()  # CUSUM mode (recommended)")
 
 
 if __name__ == "__main__":
