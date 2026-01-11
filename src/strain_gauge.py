@@ -440,17 +440,31 @@ class StrainGauge:
         self.k_eff_history.append(k_eff)
 
         # Compute statistics
+        # Individual sample z-score (for reporting, not detection)
         timing_z = abs(timing_ns - self.baseline_timing_mean) / self.baseline_timing_std
 
-        # Variance ratio (key detection signal)
-        if len(self.timing_history) >= 10:
-            current_std = np.std(list(self.timing_history)[-100:])
-            variance_ratio = current_std / self.baseline_timing_std
+        # Windowed statistics for detection (fat-tail robust)
+        # With κ=230, individual samples unreliable - use aggregates
+        if len(self.timing_history) >= 50:
+            window = list(self.timing_history)[-100:]
+            window_mean = np.mean(window)
+            window_std = np.std(window)
+
+            # Mean shift z-score (windowed, more stable)
+            mean_z = abs(window_mean - self.baseline_timing_mean) / (self.baseline_timing_std / np.sqrt(len(window)))
+
+            # Variance ratio (key detection signal)
+            variance_ratio = window_std / self.baseline_timing_std
         else:
+            mean_z = 0.0
             variance_ratio = 1.0
 
-        # Detection
-        detected = timing_z > self.config.z_threshold or variance_ratio > 2.0
+        # Detection: use VARIANCE RATIO only
+        # Mean-based detection doesn't work because:
+        # - Calibration timing differs from read() timing (7.5μs vs 10.2μs)
+        # - Fat-tailed distribution makes z-scores unreliable
+        # Variance ratio correctly captures workload-induced jitter increase
+        detected = variance_ratio > 5.0
 
         # Health
         acf = self.lorenz.get_acf()
