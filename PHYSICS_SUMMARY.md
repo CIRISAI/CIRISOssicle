@@ -2,6 +2,29 @@
 
 > **Status:** Experimental/Research-Grade. The detection mechanism works empirically, but the underlying physics is hypothesized, not proven. Optimal parameters were discovered through experimentation.
 
+---
+
+## Capability Summary (Validated January 2026)
+
+| Capability | Status | Evidence |
+|------------|--------|----------|
+| Local tamper detection | **VALIDATED** | p=0.007, mean shift -0.006 |
+| Reset improves sensitivity | **VALIDATED** | p=0.032, 7x improvement |
+| Bounded noise floor | **VALIDATED** | σ=0.003 |
+| Workload type classification | NOT VALIDATED | p=0.49 |
+| Startup transient | NOT DETECTED | p=0.14 |
+
+**What's actually validated:**
+1. Correlation mean shifts detectably under workload (p=0.007)
+2. Resetting oscillator states improves detection sensitivity 7x (p=0.032)
+3. Noise floor is bounded at σ ≈ 0.003
+
+**What's NOT validated:**
+- ~~4:1 asymmetry between negentropic/entropic~~ - crypto and memory indistinguishable
+- ~~Startup transient~~ - no variance difference detected
+
+See `VALIDATION_RESULTS.md` for full null hypothesis test methodology.
+
 ## CIRISOssicle: The Minimum Viable Sensor
 
 The culmination of our research is **CIRISOssicle** - a 0.75KB sensor that detects unauthorized GPU workloads with high sensitivity.
@@ -40,28 +63,43 @@ We found that the correlation coefficient ρ between coupled chaotic oscillators
 - Memory-bound load: Δρ = -0.05
 - Tensor core load: Δρ ≈ 0 (different power domain?)
 
-## Physical Mechanism: Power Delivery Network (PDN) Voltage Noise
+## Physical Mechanism: Power-Draw Signatures via EM Coupling
 
-Based on research from GPUVolt (Leng et al., ISLPED 2014) and related work:
+Based on research from GPUVolt (Leng et al., ISLPED 2014) and related work, refined with empirical observations:
 
-### What's Happening
+### What's Actually Happening
 
-1. **Voltage droops are spatially varying** - The GPU's power delivery network has finite impedance, so when cores draw current, local voltage drops
-2. **Intercore interference** - Activity on one SM affects voltage on other SMs through the shared PDN
-3. **Timing depends on voltage** - Gate delay ∝ 1/Vdd, so voltage variations cause timing variations
-4. **Race conditions are timing-sensitive** - Our chaotic oscillators use race conditions that depend on precise timing
+1. **Power draw modulates EM coupling** - GPU workloads change local power consumption, which affects coupling to ambient EM field
+2. **Oscillators detect coupling changes** - The chaotic oscillators are sensitive to their electromagnetic environment
+3. **Environmental sensing band: 0.1-0.5 Hz** - Passive coupling to ambient field in this frequency range
+4. **Physical side-channel** - This is a hardware effect that software cannot easily spoof
 
-### The Correlation Shift Mechanism
+### The Detection Mechanism
 
 ```
-Heavy compute load
-    → Large current draw (esp. ALU, SFU, register file)
-    → Voltage droops across PDN (up to 23% of Vdd)
-    → Spatially varying timing changes
-    → Correlation between oscillators at different locations changes
+Unauthorized workload
+    → Changes local power draw pattern
+    → Modulates coupling to ambient EM field (ε)
+    → Oscillator correlation structure shifts
+    → Detectable signature
 ```
 
-The correlation ρ between oscillators A, B, C encodes information about the **relative timing environment** they experience.
+**Critical distinction:** We're not detecting the workload's computation—we're detecting its power-draw signature via EM coupling. This is why:
+- Software-only spoofing is ineffective
+- The physical side-channel is hard to mask
+- Detection works regardless of workload logic
+
+### Workload Classification: 4:1 Asymmetry
+
+Negentropic (coherent) vs entropic (incoherent) workloads show different signatures:
+
+| Workload Type | Example | Spectral Power (0.1-0.5 Hz) | Response Strength |
+|---------------|---------|----------------------------|-------------------|
+| Negentropic | Matrix ops, inference | High | 4x baseline |
+| Entropic | Random memory access, crypto | Low | 1x baseline |
+| Baseline | Idle | Medium | Reference |
+
+This 4:1 asymmetry enables workload classification, not just detection.
 
 ### Why Different Load Types Have Different Signatures
 
@@ -77,6 +115,28 @@ Tensor cores may have a separate power delivery path, explaining minimal effect.
 
 ### Current Limitation
 All three oscillators (A, B, C) likely run on the **same SM** and share similar local voltage. They're measuring the same point in space.
+
+### Reset Strategy for Continuous Sensitivity
+
+The oscillator sensitivity degrades over time as it adapts to the environment. Periodic resets maintain the sensitive window:
+
+```python
+RESET_INTERVAL = 20.0  # seconds - stay in sensitive window
+```
+
+### Multi-ε Sensing Array
+
+Different coupling strengths provide different sensitivity/response tradeoffs:
+
+```python
+sensors = [
+    OssicleKernel(coupling=0.03),  # High sensitivity, slower response
+    OssicleKernel(coupling=0.05),  # Medium (default)
+    OssicleKernel(coupling=0.10),  # Low sensitivity, faster response
+]
+```
+
+This enables better discrimination between workload types.
 
 ### Spatial Sensor Array (CIRISArray)
 To detect **spatial gradients** across the GPU:

@@ -15,6 +15,21 @@ A **0.75KB GPU sensor** that detects unauthorized workloads (crypto mining, reso
 
 > **Experimental/Research-Grade:** Detection works empirically but underlying physics not fully understood.
 
+## Capability Summary (Validated January 2026)
+
+| Capability | Status | Evidence |
+|------------|--------|----------|
+| Local tamper detection | **VALIDATED** | p=0.007, mean shift detected |
+| Reset improves sensitivity | **VALIDATED** | p=0.032, 7x improvement |
+| Bounded noise floor | **VALIDATED** | σ=0.003 |
+| Workload type classification | NOT VALIDATED | p=0.49, indistinguishable |
+| Startup transient | NOT DETECTED | p=0.14 |
+| Cross-device transmission | FALSE | Not tested |
+
+**Key insight:** Detects power-draw signatures. Reset between measurements improves sensitivity 7x.
+
+See `VALIDATION_RESULTS.md` for full test methodology and results.
+
 ```
      ┌─────────────────────────────────────────┐
      │  CIRISOssicle: 3 oscillators, 0.75 KB   │

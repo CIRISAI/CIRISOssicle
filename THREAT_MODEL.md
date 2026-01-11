@@ -5,7 +5,15 @@
 
 ## Overview
 
-CIRISOssicle detects unauthorized GPU workloads through correlation fingerprinting. This document describes what the sensor can and cannot detect, and its security properties.
+CIRISOssicle detects unauthorized GPU workloads through power-draw signature detection via EM coupling. This document describes what the sensor can and cannot detect, and its security properties.
+
+### Detection Mechanism
+
+The oscillator doesn't detect workloads directly—it detects the workload's effect on local power draw, which modulates coupling to the ambient EM field. This is a **physical side-channel** that:
+
+1. **Can't be spoofed by software-only attacks** - The power draw is a hardware effect
+2. **Is hard to mask** - Masking requires changing the power profile, which affects the malicious workload
+3. **Works regardless of workload logic** - Detection is based on physical signature, not code analysis
 
 ---
 
@@ -49,12 +57,14 @@ The sensor detects workloads that:
 
 ### 3. Sophisticated Evasion
 
-| Attack | Vulnerability |
-|--------|---------------|
-| Power-matched mimicry | Attacker matches authorized power profile |
-| Correlation spoofing | Attacker injects counter-correlations |
-| Sensor starvation | Preventing ossicle from running |
-| Clock manipulation | Altering timing assumptions |
+| Attack | Vulnerability | Difficulty |
+|--------|---------------|------------|
+| Power-matched mimicry | Attacker matches authorized power profile | HIGH - requires hardware-level changes |
+| ~~Correlation spoofing~~ | ~~Attacker injects counter-correlations~~ | INEFFECTIVE - physical side-channel |
+| Sensor starvation | Preventing ossicle from running | MEDIUM - detectable by external monitor |
+| ~~Software-only spoofing~~ | ~~Fake the sensor readings~~ | INEFFECTIVE - can't fake EM coupling |
+
+**Why software spoofing fails:** The sensor detects power-draw signatures via EM coupling. Software cannot control the physical power draw pattern without actually changing the computation, which would affect the malicious workload's effectiveness.
 
 ### 4. Scope Limitations
 

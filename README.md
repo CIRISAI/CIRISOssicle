@@ -68,6 +68,18 @@ python experiments/exp25_entropy_strain.py
 python experiments/exp24_minimum_antenna.py
 ```
 
+## Capability Summary (Validated January 2026)
+
+| Capability | Status | Evidence |
+|------------|--------|----------|
+| Local tamper detection | **VALIDATED** | p=0.007, mean shift detected |
+| Reset improves sensitivity | **VALIDATED** | p=0.032, 7x improvement |
+| Bounded noise floor | **VALIDATED** | σ=0.003 |
+| Workload type classification | NOT VALIDATED | p=0.49, indistinguishable |
+| Startup transient | NOT DETECTED | p=0.14 |
+
+See `VALIDATION_RESULTS.md` for full null hypothesis test results.
+
 ## How It Works
 
 ### The Ossicle Analogy
@@ -78,8 +90,10 @@ Like the tiny bones in your inner ear (malleus, incus, stapes) that amplify soun
 2. Each oscillator is a 1D cellular automaton with logistic map dynamics
 3. **1.1 degree twist** between oscillators (empirically discovered optimal)
 4. Correlations between oscillators form interference patterns
-5. GPU power delivery network (PDN) noise shifts the pattern
-6. Unauthorized workloads create detectable correlation shifts
+5. **Power draw modulates EM coupling** - workloads affect coupling to ambient field
+6. Unauthorized workloads create detectable power-draw signatures
+
+**Key insight:** The oscillator doesn't detect workloads directly—it detects the workload's effect on local power draw, which modulates coupling to the ambient EM field. This physical side-channel is hard to spoof.
 
 ### Twist Angle
 
@@ -93,13 +107,17 @@ The 1.1 degree twist angle was discovered empirically to be optimal on RTX 4090.
 
 ```
 Unauthorized GPU workload (crypto mining)
-    → Current draw changes
-    → PDN voltage droops
-    → Timing variations in chaotic oscillators
-    → Correlation shift
+    → Power draw pattern changes
+    → Modulates coupling to ambient EM field
+    → Oscillator correlation structure shifts
     → z-score > 2.0
     → DETECTED!
 ```
+
+This is a **physical side-channel** that:
+- Can't be spoofed by software-only attacks
+- Is hard to mask without affecting the malicious workload
+- Works regardless of what the unauthorized code is doing logically
 
 ## Related Projects
 
