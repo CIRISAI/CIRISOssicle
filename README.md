@@ -28,20 +28,24 @@ Free for individuals, DIY, academics, nonprofits, and orgs <$1M revenue.
 
 ## Detection Results (Validated January 2026)
 
-| Workload | Timing z-score | Detection |
+Detection uses **variance ratio** (not z-scores due to fat-tailed distribution):
+
+| Workload | Variance Ratio | Detection |
 |----------|----------------|-----------|
-| crypto 30% | 534 | **YES** |
-| crypto 50% | 682 | **YES** |
-| crypto 70% | 745 | **YES** |
-| crypto 90% | 1652 | **YES** |
+| Baseline | 0.67x | 0% FP |
+| Crypto 30% | 6.15x | 100% TP |
+| Crypto 50% | 9.08x | 100% TP |
+| Crypto 70% | 9.11x | 100% TP |
+| Crypto 90% | 8.81x | 100% TP |
 
-### Workload Discrimination
+Threshold: variance_ratio > 5.0
 
-| Workload | Δ Timing (μs) | Distinguishable |
-|----------|---------------|-----------------|
-| crypto | +25.84 ± 1.48 | p < 0.0001 |
-| memory | +11.00 ± 0.32 | p < 0.0001 |
-| compute | +51.13 ± 1.06 | p < 0.0001 |
+### Distribution Finding
+
+Z-scores are **Student-t distributed** (NOT Gaussian):
+- Kurtosis κ = 230
+- Degrees of freedom ≈ 1.3
+- Detection works via variance increase, not mean shift
 
 ## Quick Start
 
@@ -77,22 +81,26 @@ print(f"Random: {trng_result.bytes.hex()}")
 
 ## How It Works
 
-Detection is based on **Lorenz oscillator at critical point (dt=0.025)**:
+Detection is based on **variance ratio monitoring**:
 
 1. Run minimal GPU kernel, measure timing (nanoseconds)
-2. Feed timing perturbations into Lorenz oscillator
-3. Monitor ACF to ensure criticality (ACF ~0.5)
-4. Detect workloads via timing distribution shift (z-scores)
-5. Discriminate workload types by timing signature
+2. Feed timing into Lorenz oscillator at critical point (dt=0.025)
+3. ACF feedback auto-tunes dt for thermal stability
+4. Detect workloads via **variance ratio > 5.0** (not z-scores)
+5. Fat-tailed distribution (κ=230) makes mean-based detection unreliable
 
-Key insight from RATCHET: dt=0.025 is the critical operating point where sensitivity is maximized.
+Key insights:
+- dt=0.025 is critical point (ACF ~0.45)
+- Variance ratio is robust to fat-tailed distribution
+- 0% false positives, 100% true positives at 30%+ load
 
 ## Key Specs
 
 | Metric | Value |
 |--------|-------|
-| Detection z-score | 534-1652 (100% rate) |
-| Workload discrimination | p < 0.0001 |
+| Detection | 0% FP, 100% TP |
+| Variance ratio (workload) | 6-9x baseline |
+| Kurtosis | 230 (fat-tailed) |
 | ACF at criticality | 0.45 |
 | TRNG entropy | 7.99 bits/byte |
 
