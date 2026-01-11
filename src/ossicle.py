@@ -1,20 +1,33 @@
 #!/usr/bin/env python3
 """
-CIRISOssicle - GPU Tamper Detection Sensor (LEGACY)
+CIRISOssicle - GPU Tamper Detection Sensor (DEPRECATED)
 
-DEPRECATION NOTICE:
-    This module is kept for backward compatibility.
-    For new code, use timing_sensor.py which is simpler and more sensitive.
+================================================================================
+DEPRECATION NOTICE - USE strain_gauge.py INSTEAD
+================================================================================
 
-    Experimental findings (January 2026):
-    - Cross-GPU test: Correlations are 100% ALGORITHMIC (not physical)
-    - Timing comparison: TimingSensor is 3.2x more sensitive
-    - Twist angle test: Angle is IRRELEVANT to detection
+This module is DEPRECATED. Use src/strain_gauge.py for production.
 
-    The chaotic oscillator adds complexity without benefit.
-    Detection actually works via kernel timing variance, not PDN coupling.
+Key findings from RATCHET Experiments 68-116:
+- dt = 0.025 is the critical operating point (88% of variance explained)
+- Raw timing LSBs (4 bits) → TRNG (465 kbps, 6/6 NIST)
+- Lorenz oscillator at dt=0.025 → Strain sensor (ACF ~0.5, max sensitivity)
+- Twist angle is IRRELEVANT
+- Correlations are 100% ALGORITHMIC
 
-See: src/timing_sensor.py for the recommended implementation.
+MIGRATION:
+    # OLD (deprecated)
+    from src.ossicle import OssicleDetector
+    detector = OssicleDetector()
+
+    # NEW (production)
+    from src.strain_gauge import StrainGauge
+    gauge = StrainGauge()
+    gauge.calibrate()
+    reading = gauge.read()
+
+See: src/strain_gauge.py for production implementation.
+See: RATCHET_LEARNINGS.md for full experimental findings.
 
 Author: CIRIS L3C (Eric Moore)
 License: BSL 1.1

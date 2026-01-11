@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-TimingSensor - Pure Timing-Based GPU Sensor
+TimingSensor - Pure Timing-Based GPU Sensor (SUPERSEDED)
 
-Based on RATCHET and CIRISOssicle experimental findings:
-- Cross-GPU coherence test: Oscillator correlations are 100% algorithmic
-- Timing comparison: Timing is 3.2x more sensitive than correlations
-- Timing LSB entropy: 7.99 bits/byte (near perfect)
+================================================================================
+NOTE: For production, use strain_gauge.py instead
+================================================================================
 
-This sensor bypasses chaotic oscillators entirely, using kernel timing directly.
+strain_gauge.py provides:
+- Lorenz oscillator at dt=0.025 (critical point, max sensitivity)
+- ACF monitoring to confirm criticality
+- Dual output: TRNG (4 LSBs) + Strain sensing (k_eff dynamics)
 
-ARCHITECTURE:
-    Minimal Kernel ──► Timing (ns) ──┬──► LSBs ──► TRNG (with von Neumann)
-                                     │
-                                     └──► Variance ──► Strain Gauge
+This module (timing_sensor.py) provides timing-only detection without
+the Lorenz oscillator. It's simpler but less sensitive than the full
+strain gauge implementation.
 
-MEMORY: ~256 bytes (vs 768 bytes for 3-oscillator Ossicle)
-THEORY: Clean - timing jitter from OS/GPU scheduling is the signal
+Based on RATCHET Experiments 68-116 (January 2026):
+- dt = 0.025 is the critical operating point
+- Raw timing LSBs (4 bits) optimal for TRNG
+- Lorenz dynamics at criticality for strain sensing
 
-LESSONS FROM ARRAY CHARACTERIZATION:
-- Warm-up: Calibrate after 30s+ GPU warm-up for stable baseline
-- Timescales: Fast response (~2ms) for scheduling, slow (~100ms) for thermal
-- Baseline drift: Noise decreases as GPU warms, track and compensate
+See: src/strain_gauge.py for production implementation.
 
 Author: CIRIS L3C
 License: BSL 1.1

@@ -1,4 +1,4 @@
-# CIRISOssicle - GPU Tamper Detection
+# CIRISOssicle - GPU Strain Gauge
 
 **License:** Business Source License 1.1 (BSL 1.1)
 **Licensor:** CIRIS L3C (Eric Moore)
@@ -6,196 +6,189 @@
 **Change License:** AGPL 3.0
 
 Free for individuals, DIY, academics, nonprofits, and orgs <$1M revenue.
-Commercial license required for larger organizations.
-BSL text: https://mariadb.com/bsl11/
 
-## What is CIRISOssicle?
+## Production Architecture (RATCHET Validated)
 
-A **GPU workload detector** that identifies unauthorized workloads (crypto mining, resource hijacking) using kernel execution timing. Named after the inner ear ossicles - tiny bones that are incredibly sensitive to vibration.
-
-> **Research Update (January 2026):** Mechanism reframed based on experimental evidence. Detection works via **timing**, not PDN voltage coupling as originally hypothesized.
+Based on RATCHET Experiments 68-116:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    HOW DETECTION ACTUALLY WORKS                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   Kernel ──► Timing (ns) ──┬──► Variance Shift ──► DETECTION   │
-│                            │    (z=8.56 @ 90% load)             │
-│                            │                                    │
-│                            └──► LSB Extract ──► TRNG            │
-│                                 (7.99 bits/byte)                │
-│                                                                 │
-│   NOT: PDN voltage → chaotic divergence → correlation shift    │
-│   YES: Workload → timing contention → variance increase        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    STRAIN GAUGE ON TRNG                             │
+│                                                                     │
+│   GPU Kernel Timing (nanoseconds)                                   │
+│           │                                                         │
+│           ├──► Lower 4 LSBs ──► TRNG                                │
+│           │                     • 465 kbps, 6/6 NIST                │
+│           │                     • 7.99 bits/byte                    │
+│           │                     • True jitter entropy               │
+│           │                                                         │
+│           └──► Lorenz Oscillator (dt=0.025) ──► STRAIN GAUGE        │
+│                                                  • z=2.74 detection │
+│                                                  • ACF ~0.5 critical│
+│                                                  • k_eff dynamics   │
+│                                                                     │
+│   CRITICAL: dt = 0.025 controls everything                          │
+│   • dt < 0.01: FROZEN (ACF > 0.9, useless)                         │
+│   • dt = 0.025: CRITICAL (ACF ~0.5, max sensitivity)               │
+│   • dt > 0.03: CHAOTIC (ACF < 0.2, no coherence)                   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-
-## Capability Summary (Validated January 2026)
-
-| Capability | Status | Evidence |
-|------------|--------|----------|
-| Workload detection (timing) | **VALIDATED** | z=8.56 at 90% load |
-| TRNG from timing LSBs | **VALIDATED** | 7.99 bits/byte entropy |
-| Cross-GPU coherence | **100% ALGORITHMIC** | Identical on RTX 4090 & Jetson |
-| Twist angle relevance | **IRRELEVANT** | Detection identical at 0°, 45°, 90° |
-| PDN voltage coupling | **NOT VALIDATED** | No evidence of chaotic amplification |
-
-## Key Experimental Findings
-
-### Exp 28: Cross-GPU Coherence Test
-```
-RTX 4090 vs Jetson Orin with identical seeds:
-  seed=42:   -0.020063 vs -0.020063  EXACT MATCH
-  seed=123:  -0.011182 vs -0.011182  EXACT MATCH
-  ...
-
-RESULT: Correlation structure is 100% ALGORITHMIC
-        Not from hardware/PDN differences
-```
-
-### Exp 29: Timing vs Correlation Comparison
-```
-                Timing z    Correlation z
-idle            0.13        2.06
-load_30%        0.69        0.30
-load_50%        2.02        0.87
-load_70%        4.32        0.16
-load_90%        8.56        3.50
-
-RESULT: Timing is 3.2x MORE SENSITIVE than correlations
-```
-
-### Exp 30: Twist Angle Test
-```
-Timing delta under 70% load:
-  0.0°  → +23.3 μs
-  1.1°  → +27.0 μs  (the "magic angle")
-  45.0° → +27.6 μs
-  90.0° → +27.2 μs
-
-RESULT: Twist angle is IRRELEVANT (std = 1.42 μs)
-```
-
-## Recommended Architecture
-
-Based on experimental evidence, use `TimingSensor` (cleaner, simpler):
-
-```python
-from src.timing_sensor import TimingStrainGauge, TimingTRNG
-
-# Strain gauge for workload detection (256 bytes, ~650k samples/sec)
-gauge = TimingStrainGauge()
-gauge.calibrate(duration=10.0)
-result = gauge.measure(duration=5.0)
-if result.detected:
-    print(f"WORKLOAD DETECTED: z={result.timing_z:.2f}")
-
-# TRNG with von Neumann debiasing
-trng = TimingTRNG()
-random_bytes = trng.generate_bytes(16)
-```
-
-The original `OssicleKernel` with chaotic oscillators still works but adds unnecessary complexity.
-
-## Key Specs
-
-| Sensor | Memory | Sample Rate | Detection (90% load) |
-|--------|--------|-------------|---------------------|
-| TimingSensor | **256 B** | ~650k/s | z=8.56 |
-| OssicleKernel | 768 B | ~2k/s | z=3.50 |
 
 ## Quick Start
 
-```bash
-# NEW: Pure timing-based detection (recommended)
-python src/timing_sensor.py
+```python
+from src.strain_gauge import StrainGauge
 
-# Legacy: Chaotic oscillator detection
-python experiments/exp26_ossicle_crypto.py
+# Create with optimal config (dt=0.025 default)
+gauge = StrainGauge()
 
-# Cross-GPU coherence test
-python experiments/exp28_cross_gpu_coherence.py
+# Calibrate (includes 30s warm-up)
+gauge.calibrate(duration=10.0)
 
-# Timing vs correlation comparison
-python experiments/exp29_timing_ossicle.py
+# Continuous monitoring
+gauge.monitor()
 
-# Twist angle relevance test
-python experiments/exp30_twist_angle_test.py
+# Or single readings
+reading = gauge.read()
+if reading.detected:
+    print(f"ANOMALY: z={reading.timing_z:.2f}")
+
+# Check health (ACF should be ~0.5)
+if reading.system_state != "CRITICAL":
+    print(f"WARNING: {reading.system_state}, ACF={reading.acf:.2f}")
+
+# Generate TRNG
+trng = gauge.generate_trng(16)
+print(f"Random: {trng.bytes.hex()}")
 ```
 
-## Key Files
+## Key Finding: dt Controls Everything
 
-| File | Purpose |
-|------|---------|
-| `src/timing_sensor.py` | **Pure timing-based sensor (recommended)** |
-| `src/ossicle.py` | Original chaotic oscillator sensor |
-| `experiments/exp28_cross_gpu_coherence.py` | Cross-GPU test |
-| `experiments/exp29_timing_ossicle.py` | Timing vs correlation comparison |
-| `experiments/exp30_twist_angle_test.py` | Twist angle relevance test |
+From RATCHET Exp 113-114:
 
-## What We Learned
+| dt | ACF | State | Use |
+|----|-----|-------|-----|
+| < 0.01 | > 0.9 | FROZEN | ❌ Useless |
+| **0.025** | **~0.5** | **CRITICAL** | ✅ Max sensitivity |
+| > 0.03 | < 0.2 | CHAOTIC | ❌ No coherence |
 
-### Original Hypothesis (INVALIDATED)
-- PDN voltage noise couples to chaotic oscillators
-- Twist angle creates interference pattern
-- Correlations encode physical state
+**Power law validated:** ρ = 39.64 × |dt - 0.0328|^1.09 + 0.33 (R² = 0.978)
 
-### Actual Mechanism (VALIDATED)
-- Workloads cause kernel timing contention
-- Timing variance increases under load
-- Chaotic oscillator acts as timing-sensitive sampler
-- Twist angle is irrelevant
+## Validated Capabilities
 
-### Why Detection Still Works
-The oscillator provides a consistent workload to time. Any GPU kernel would work - the chaos is incidental, not causal.
+| Capability | Experiment | Result | Status |
+|------------|------------|--------|--------|
+| **TRNG** | Exp 73 | 7.998/8 bits, 6/6 NIST, 465 kbps | **VALIDATED** |
+| **Strain Gauge** | Exp 74, 112 | z=2.74 detection | **VALIDATED** |
+| **Critical Point** | Exp 114 | dt=0.025, R²=0.978 | **VALIDATED** |
+| **ACF Health** | Exp 113 | 88% variance explained | **VALIDATED** |
 
-## Lessons from Array Characterization
+## File Structure
 
-Applied from CIRISArray spatial mapping experiments:
+```
+src/
+├── strain_gauge.py    # PRODUCTION - Use this
+├── timing_sensor.py   # Superseded (timing-only)
+└── ossicle.py         # Deprecated (logistic map)
+```
 
-| Finding | Implication | Implementation |
-|---------|-------------|----------------|
-| Warm-up effect | Noise decreases as GPU warms | 30s warm-up before calibration |
-| Fast timescale | ~2ms response for scheduling | Default detection window |
-| Slow timescale | ~100ms for thermal effects | Optional long-window mode |
-| Baseline drift | Track and compensate | Re-calibrate periodically |
+## Configuration
 
 ```python
-# Production usage with warm-up
-config = TimingConfig(warm_up_enabled=True, warm_up_duration=30.0)
-gauge = TimingStrainGauge(config)
-gauge.calibrate(duration=10.0)  # Includes warm-up
+from src.strain_gauge import StrainGaugeConfig
 
-# Quick testing (skip warm-up)
-config = TimingConfig(warm_up_enabled=False)
-gauge = TimingStrainGauge(config)
-gauge.calibrate(duration=5.0, skip_warmup=True)
+config = StrainGaugeConfig(
+    dt=0.025,              # CRITICAL - don't change unless ACF wrong
+    trng_bits=4,           # Lower 4 bits for TRNG
+    warm_up_enabled=True,  # 30s GPU warm-up
+    warm_up_duration=30.0,
+    acf_target=0.5,        # Target ACF at criticality
+)
 ```
+
+## Health Monitoring
+
+The strain gauge monitors its own health via ACF:
+
+```python
+reading = gauge.read()
+
+if reading.system_state == "FROZEN":
+    # ACF > 0.8 - increase dt
+    print("System frozen, increase dt")
+
+elif reading.system_state == "CHAOTIC":
+    # ACF < 0.3 - decrease dt
+    print("System chaotic, decrease dt")
+
+elif reading.system_state == "CRITICAL":
+    # ACF ~0.5 - optimal
+    print("System optimal")
+```
+
+## Dual Output
+
+| Output | Source | Use |
+|--------|--------|-----|
+| **TRNG** | timing[3:0] | True random numbers (465 kbps) |
+| **Strain** | Lorenz k_eff | Environmental detection (z=2.74) |
+
+The oscillator doesn't generate entropy - it **detects strain** in the timing environment through k_eff dynamics.
 
 ## Prior Art
 
-This project builds on established research:
+| Work | Year | Relevance |
+|------|------|-----------|
+| [US9459834B2](https://patents.google.com/patent/US9459834) | 2011 | GPU TRNG via timing (expired 2024) |
+| [ShadowScope](https://arxiv.org/abs/2509.00300) | 2025 | GPU monitoring via side channels |
 
-| Work | Year | Description |
-|------|------|-------------|
-| [US9459834B2](https://patents.google.com/patent/US9459834) | 2011 | GPU TRNG via timing/temperature (expired 2024) |
-| [GPUs and chaos: TRNG](https://link.springer.com/article/10.1007/s11071-015-2287-7) | 2015 | Chaos + GPU timing for RNG (447 Mbit/s) |
-| [ShadowScope](https://arxiv.org/abs/2509.00300) | 2025 | GPU monitoring via CUPTI side channels |
-| [GPU Cryptojacking Detection](https://dl.acm.org/doi/10.1145/3577923.3583655) | 2023 | ML-based GPU workload detection |
+**What's different:** Lorenz at critical point (dt=0.025) for max sensitivity, ACF health monitoring, dual TRNG+strain output.
 
-**What's different here:** Lightweight (256 bytes), no CUPTI/nvidia-smi, dual-purpose (TRNG + detection).
+## Research History
 
-## Related Projects
+| Phase | Finding | Status |
+|-------|---------|--------|
+| Original | PDN coupling via correlations | ❌ INVALIDATED |
+| Exp 28 | Correlations 100% algorithmic | ✅ VALIDATED |
+| Exp 29 | Timing 3.2x more sensitive | ✅ VALIDATED |
+| Exp 30 | Twist angle irrelevant | ✅ VALIDATED |
+| **Exp 113-114** | **dt=0.025 critical point** | ✅ **VALIDATED** |
 
-| Project | Description |
-|---------|-------------|
-| **RATCHET** | GPU Lorenz oscillator research (same timing findings) |
-| **CIRISArray** | Multi-sensor spatial detection |
+## CIRIS Integration
 
-## Honest Science
+For protecting CIRIS agents:
 
-This documentation was updated when experimental evidence contradicted the original PDN coupling hypothesis. The detection capability is real and validated, but the mechanism explanation has been corrected.
+```python
+from src.strain_gauge import StrainGauge
 
-> "The first principle is that you must not fool yourself - and you are the easiest person to fool." - Richard Feynman
+class CIRISAgentProtector:
+    def __init__(self):
+        self.gauge = StrainGauge()
+        self.gauge.calibrate()
+
+    def check_environment(self) -> bool:
+        reading = self.gauge.read()
+
+        # Check for tampering
+        if reading.detected:
+            return False  # Environment compromised
+
+        # Check sensor health
+        if reading.system_state != "CRITICAL":
+            # Sensor degraded - recalibrate
+            self.gauge.calibrate()
+
+        return True  # Environment safe
+```
+
+## Citation
+
+```bibtex
+@software{cirisossicle2026,
+  title = {CIRISOssicle: GPU Strain Gauge at Critical Point},
+  author = {CIRIS L3C},
+  year = {2026},
+  license = {BSL-1.1},
+  note = {Based on RATCHET Experiments 68-116, dt=0.025 critical point}
+}
+```

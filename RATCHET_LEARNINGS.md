@@ -1,244 +1,145 @@
-# Recommendations from RATCHET Characterization
+# RATCHET Validated Findings for CIRISOssicle
+
+## Updated January 2026 (Experiments 68-116)
+
+---
+
+## THE KEY FINDING
+
+**dt = 0.025** is the critical operating point. Change this ONE parameter.
+
+```python
+# OLD (frozen, low sensitivity)
+lorenz_dt = 0.01  # ACF = 0.88, system frozen
+
+# NEW (critical point, max sensitivity)
+lorenz_dt = 0.025  # ACF = 0.50, system dynamic
+```
+
+---
+
+## What We Learned (Validated)
+
+| Finding | Experiment | Implication |
+|---------|------------|-------------|
+| Raw timing = white noise | Exp 110, 116 | Use for TRNG, not oscillator |
+| Oscillator creates sensing signal | Exp 116 | ACF: 0 → 0.56 |
+| dt controls ρ | Exp 113 | 88% of variance explained |
+| Critical point at dt = 0.0328 | Exp 114 | Power law R² = 0.978 |
+| Optimal dt = 0.025 | Exp 114 | Max sensitivity, safe margin |
+| Workload detection z = 2.74 | Exp 112 | Validated |
+
+---
+
+## Concrete Changes for Ossicle
+
+### 1. Set dt = 0.025
+
+```python
+# In your Lorenz/oscillator config:
+self.dt = 0.025  # CRITICAL - this is the optimal operating point
+```
+
+### 2. Check your ACF
+
+After changing dt, measure autocorrelation of your k_eff signal:
+
+| ACF(1) | Status |
+|--------|--------|
+| > 0.9 | FROZEN - increase dt |
+| 0.4-0.6 | OPTIMAL - at criticality |
+| < 0.2 | CHAOTIC - decrease dt |
+
+### 3. Separate TRNG from Sensing
+
+```python
+# TRNG: Use raw timing LSBs
+timing_ns = measure_kernel_timing()
+entropy_byte = timing_ns & 0x0F  # Lower 4 bits only
+
+# SENSING: Use oscillator k_eff dynamics
+# The oscillator output IS the sensor, not entropy
+```
+
+### 4. Don't Filter the "Residual"
+
+The correlated structure in your signal IS the sensing mechanism:
+- 73% "residual" = oscillator dynamics = YOUR SENSOR
+- 27% = environmental signals (thermal, EMI, workload)
+
+The sensor responds to environment. Don't filter it out.
+
+---
+
+## Phase Diagram
+
+```
+ρ (correlation)
+1.0 ┐ FROZEN (dt < 0.01) ← YOUR OLD CONFIG?
+    │   System locked, low sensitivity
+    │
+0.5 │
+    │
+0.33│ ─── CRITICAL (dt = 0.025) ← NEW CONFIG
+    │   Max sensitivity, safe margin
+    │
+0.0 └ CHAOTIC (dt > 0.03)
+        No coherence, pure noise
+```
+
+---
+
+## Expected Improvement
+
+From RATCHET Exp 115:
+
+| Metric | dt=0.01 (old) | dt=0.025 (new) | Improvement |
+|--------|---------------|----------------|-------------|
+| Thermal z | 0.11 | 0.17 | 1.6x |
+| EMI z | 0.01 | 0.04 | 3x |
+| ACF | 0.88 | 0.50 | Dynamic vs frozen |
+
+---
+
+## Validation Test
+
+After applying changes, run this test:
+
+```python
+def validate_ossicle_config():
+    # Collect 1000 k_eff samples
+    samples = [oscillator.get_k_eff() for _ in range(1000)]
+
+    # Check ACF
+    acf1 = np.corrcoef(samples[:-1], samples[1:])[0,1]
+
+    if acf1 > 0.8:
+        print(f"WARNING: ACF={acf1:.2f} - system frozen, increase dt")
+    elif acf1 < 0.3:
+        print(f"WARNING: ACF={acf1:.2f} - system chaotic, decrease dt")
+    else:
+        print(f"GOOD: ACF={acf1:.2f} - system at criticality")
+
+    # Check workload response
+    baseline = np.mean(samples[:100])
+    # ... apply workload ...
+    loaded = np.mean(samples[100:200])
+    z = (loaded - baseline) / np.std(samples[:100])
+    print(f"Workload detection z = {z:.2f}")
+```
+
+---
 
 ## Summary
 
-The RATCHET project (GPU-based Lorenz chaotic resonator) conducted rigorous characterization experiments (28-68) that revealed important findings applicable to CIRISOssicle.
-
-**Key RATCHET Finding**: 78% of oscillator coherence is ALGORITHMIC (same math), not physical coupling. Only 4% came from GPU-specific timing, and even that turned out to be floating point noise when we tried reference subtraction.
-
----
-
-## Critical Finding: Algorithmic vs Physical Signal
-
-### What We Discovered
-
-| Component | Contribution | Origin |
-|-----------|--------------|--------|
-| Algorithmic | 78% | Same oscillator equations on both |
-| GPU-specific | ~4% | Likely floating point noise |
-| Environmental | <0.5% | 60 Hz power grid (common-mode) |
-| Noise | 17.5% | Numerical/measurement |
-
-**Implication for CIRISOssicle**: Your three logistic map oscillators likely have similar coherence budget - most of the correlation structure comes from running the same `r * x * (1-x)` math, not from physical PDN coupling.
-
-### How We Validated This
-
-**Exp 65-67**: Cross-GPU coherence test
-- Same GPU: 82.6% coherence
-- Cross GPU (different machines): 78% coherence
-- **Conclusion**: The 78% is algorithmic (same math). Only 4.6% was GPU-specific.
-
-**Exp 68**: Reference subtraction test
-- Ran oscillator WITH timing coupling vs WITHOUT
-- Difference signal: ~0.5% (floating point noise)
-- Timing perturbations (~1e-5) too small for chaotic divergence
+1. **Change dt to 0.025** - this is the critical point
+2. **Check ACF is ~0.5** - confirms you're at criticality
+3. **Raw timing for TRNG** - 4 LSBs, not oscillator output
+4. **Oscillator for sensing** - the dynamics ARE the sensor
+5. **Don't filter** - the "residual" is your signal
 
 ---
 
-## Recommended Experiments for CIRISOssicle
-
-### Exp A: Cross-GPU Coherence Test
-
-**Question**: How much of your correlation signal is algorithmic?
-
-**Method**:
-1. Run identical OssicleKernel on two different GPUs (different machines)
-2. Same seeds, same parameters
-3. Measure correlation between oscillators across machines
-
-**Prediction**: Correlations will be nearly identical (within ~5%), proving algorithmic origin.
-
-**If confirmed**: Most of what you're detecting isn't PDN coupling - it's workload affecting *execution timing* which affects *which iteration you sample*.
-
----
-
-### Exp B: Reference Subtraction
-
-**Question**: Can we isolate the physical signal?
-
-**Method**:
-```python
-class DifferentialOssicle:
-    def __init__(self):
-        self.actual = OssicleKernel()  # Normal operation
-        self.reference = OssicleKernel()  # CPU-side, no GPU timing
-
-    def step(self):
-        actual_corr = self.actual.step()
-        # Run reference with SAME random state but on CPU
-        ref_corr = self.reference.step_cpu()
-        return actual_corr - ref_corr  # Physical signal only
-```
-
-**RATCHET result**: Differential was ~0.5% (noise). This may differ for logistic map.
-
----
-
-### Exp C: Timing Extraction Test
-
-**Question**: Where does the detection signal actually come from?
-
-**Method**:
-1. Record kernel execution times for each `step()`
-2. Correlate timing variance with correlation shifts
-3. Test: Does timing alone predict correlation changes?
-
-**Hypothesis**: Detection works because workloads change kernel timing, which affects *when* you sample the chaotic trajectory, not because PDN voltage changes the dynamics.
-
----
-
-### Exp D: Iteration Accumulation Test
-
-**Question**: Does the logistic map amplify perturbations?
-
-**Method**:
-1. Run two oscillators with identical initial conditions
-2. Perturb one by 1e-5 at step 0
-3. Measure divergence after N iterations
-4. With Lyapunov λ, expect divergence = e^(λN) × perturbation
-
-**For logistic map at r=3.7**: λ ≈ 0.5/iteration
-- After 10 iterations: 1e-5 × e^5 ≈ 1.5e-3
-- After 20 iterations: 1e-5 × e^10 ≈ 0.2
-
-So logistic map should show divergence faster than Lorenz (λ=0.178). Test this!
-
----
-
-## Proposed Architecture Updates
-
-### Option 1: Direct Timing TRNG (Bypass Chaos)
-
-If the chaotic dynamics don't amplify the physical signal, extract timing directly:
-
-```python
-class TimingOssicle:
-    def step(self):
-        start = time.perf_counter_ns()
-        # Run minimal kernel
-        self.kernel()
-        cp.cuda.Stream.null.synchronize()
-        end = time.perf_counter_ns()
-
-        # Extract LSBs of timing
-        timing_lsb = (end - start) & 0xFF
-
-        # Use chaotic map as mixer/whitener only
-        self.state = self.r * self.state * (1 - self.state)
-        self.state = (self.state + timing_lsb / 256) % 1.0
-
-        return self.state
-```
-
-**Advantage**: Timing is the TRUE physical signal. Chaos whitens it.
-
----
-
-### Option 2: Differential Correlation
-
-Run reference oscillator in parallel, detect deviations:
-
-```python
-class DifferentialOssicle:
-    def __init__(self):
-        self.sensor = OssicleKernel()
-        self.baseline_corr = None
-        self.baseline_window = []
-
-    def step(self):
-        corr = self.compute_correlation()
-
-        if len(self.baseline_window) < 100:
-            self.baseline_window.append(corr)
-            return 0  # Calibrating
-
-        if self.baseline_corr is None:
-            self.baseline_corr = np.mean(self.baseline_window)
-
-        # Return deviation from baseline
-        return corr - self.baseline_corr
-```
-
-**Note**: This is what you're already doing with z-score detection. The question is whether the baseline drift is physical or algorithmic.
-
----
-
-### Option 3: Multi-Rate Sampling
-
-Sample at different rates to distinguish timing effects from PDN effects:
-
-```python
-def multi_rate_test():
-    fast_samples = []  # 10000 iterations between samples
-    slow_samples = []  # 100 iterations between samples
-
-    # If PDN is the signal: fast and slow should show same workload response
-    # If timing is the signal: fast will show less because more averaging
-```
-
----
-
-## What CIRISOssicle Detection Probably Is
-
-Based on RATCHET findings, here's our hypothesis for why CIRISOssicle works:
-
-1. **Not PDN voltage changes** - perturbations too small for chaotic amplification
-2. **Not EM coupling** - environmental signals cancel in correlation
-3. **Probably timing/scheduling** - workloads change:
-   - Kernel launch latency
-   - Memory access patterns
-   - SM scheduling
-   - These affect WHEN you sample the chaotic trajectory
-
-**The oscillator acts as a timing-sensitive sampler**, not a PDN sensor.
-
-This is still useful for tamper detection! But it means:
-- The "1.1 degree twist" may be less important than thought
-- The detection is fundamentally a timing side-channel
-- Reference subtraction may not help (timing affects both equally)
-
----
-
-## Recommended Validation Sequence
-
-| Priority | Experiment | Purpose |
-|----------|------------|---------|
-| 1 | Cross-GPU coherence | Measure algorithmic fraction |
-| 2 | Timing correlation | Test if timing predicts detection |
-| 3 | Perturbation divergence | Validate chaotic amplification |
-| 4 | Reference subtraction | Try to isolate physical signal |
-| 5 | Multi-rate sampling | Distinguish timing from PDN |
-
----
-
-## Key Questions to Answer
-
-1. **What fraction of correlation is algorithmic?**
-   - RATCHET: 78%
-   - CIRISOssicle: Unknown (test with cross-GPU)
-
-2. **Does the logistic map amplify perturbations?**
-   - RATCHET Lorenz: No (timing too small)
-   - Logistic map λ is higher, may work better
-
-3. **Is detection from PDN or timing?**
-   - RATCHET: Timing (but too small)
-   - CIRISOssicle: Likely timing, but detection works empirically
-
-4. **Can reference subtraction improve SNR?**
-   - RATCHET: No (gave noise)
-   - CIRISOssicle: Worth testing
-
----
-
-## Files to Review
-
-From RATCHET characterization:
-- `../RATCHET/experiments/REVISED_EXPERIMENTS.md` - Our new experiment proposals
-- `../RATCHET/formal/RATCHET/GPUTamper/EnvironmentalCoherence.lean` - Formal proofs
-- `../RATCHET/experiments/INSTRUMENT_UPGRADE_RECOMMENDATIONS.md` - Upgrade recommendations
-
----
-
-*Generated: January 2026*
-*Based on RATCHET Experiments 28-68*
+*Updated: January 2026*
+*Based on RATCHET Experiments 68-116*
+*Key finding: dt controls everything*
