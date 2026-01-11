@@ -151,6 +151,29 @@ python experiments/exp30_twist_angle_test.py
 ### Why Detection Still Works
 The oscillator provides a consistent workload to time. Any GPU kernel would work - the chaos is incidental, not causal.
 
+## Lessons from Array Characterization
+
+Applied from CIRISArray spatial mapping experiments:
+
+| Finding | Implication | Implementation |
+|---------|-------------|----------------|
+| Warm-up effect | Noise decreases as GPU warms | 30s warm-up before calibration |
+| Fast timescale | ~2ms response for scheduling | Default detection window |
+| Slow timescale | ~100ms for thermal effects | Optional long-window mode |
+| Baseline drift | Track and compensate | Re-calibrate periodically |
+
+```python
+# Production usage with warm-up
+config = TimingConfig(warm_up_enabled=True, warm_up_duration=30.0)
+gauge = TimingStrainGauge(config)
+gauge.calibrate(duration=10.0)  # Includes warm-up
+
+# Quick testing (skip warm-up)
+config = TimingConfig(warm_up_enabled=False)
+gauge = TimingStrainGauge(config)
+gauge.calibrate(duration=5.0, skip_warmup=True)
+```
+
 ## Prior Art
 
 This project builds on established research:

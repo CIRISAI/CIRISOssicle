@@ -17,6 +17,11 @@ ARCHITECTURE:
 MEMORY: ~256 bytes (vs 768 bytes for 3-oscillator Ossicle)
 THEORY: Clean - timing jitter from OS/GPU scheduling is the signal
 
+LESSONS FROM ARRAY CHARACTERIZATION:
+- Warm-up: Calibrate after 30s+ GPU warm-up for stable baseline
+- Timescales: Fast response (~2ms) for scheduling, slow (~100ms) for thermal
+- Baseline drift: Noise decreases as GPU warms, track and compensate
+
 Author: CIRIS L3C
 License: BSL 1.1
 """
@@ -42,6 +47,10 @@ class TimingConfig:
 
     # TRNG settings
     use_von_neumann: bool = True   # Apply debiasing
+
+    # Warm-up settings (from Array characterization)
+    warm_up_duration: float = 30.0  # Seconds to warm up before calibration
+    warm_up_enabled: bool = True    # Whether to run warm-up
 
     @property
     def memory_bytes(self) -> int:
@@ -230,12 +239,36 @@ class TimingStrainGauge:
         self.baseline_mean: Optional[float] = None
         self.baseline_std: Optional[float] = None
 
-    def calibrate(self, duration: float = 10.0) -> dict:
+    def warm_up(self, duration: float = None):
+        """
+        Run GPU warm-up before calibration.
+
+        From Array characterization: noise decreases as GPU warms.
+        Calibrating after warm-up gives more stable baseline.
+        """
+        duration = duration or self.config.warm_up_duration
+        print(f"Warming up GPU ({duration}s)...")
+
+        start = time.time()
+        while time.time() - start < duration:
+            _ = self.sensor.read_timing()
+
+        print("Warm-up complete.")
+
+    def calibrate(self, duration: float = 10.0, skip_warmup: bool = False) -> dict:
         """
         Calibrate baseline timing statistics.
 
+        Args:
+            duration: Calibration duration in seconds
+            skip_warmup: Skip warm-up phase (not recommended)
+
         Run with system IDLE for accurate baseline.
         """
+        # Warm-up phase (from Array characterization)
+        if self.config.warm_up_enabled and not skip_warmup:
+            self.warm_up()
+
         print(f"Calibrating timing baseline ({duration}s)...")
         print("Keep system IDLE during calibration.")
 
@@ -341,7 +374,8 @@ def demo():
     print("=" * 60)
     print()
 
-    config = TimingConfig()
+    # Disable warm-up for quick demo
+    config = TimingConfig(warm_up_enabled=False)
     print(f"Memory footprint: {config.memory_bytes} bytes")
     print()
 
@@ -356,7 +390,7 @@ def demo():
     # Strain gauge demo
     print("--- Strain Gauge Demo ---")
     gauge = TimingStrainGauge(config)
-    gauge.calibrate(duration=5.0)
+    gauge.calibrate(duration=5.0)  # skip_warmup implicit due to config
     print()
 
     print("Taking measurement...")
