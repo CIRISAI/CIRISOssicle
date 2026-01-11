@@ -1,24 +1,20 @@
 # CIRISOssicle
 
-**A 0.75KB GPU sensor that detects crypto mining and unauthorized workloads.**
+**GPU workload detection via kernel timing variance.**
 
-Software-only intrusion detection using chaotic oscillator correlation fingerprinting - no external hardware required.
-
-> **Note:** This is experimental, research-grade software. The detection mechanism and optimal parameters were discovered empirically. See "Research Status" below.
+Software-only detection of unauthorized workloads (crypto mining, resource hijacking) - no external hardware required.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                      CIRISOssicle                              │
 │                                                                │
-│   3 oscillators    64 cells    500 iterations    0.75 KB      │
+│   Kernel ──► Timing (ns) ──┬──► Variance ──► DETECTION        │
+│                            │    (z=8.56 @ 90% load)            │
+│                            │                                   │
+│                            └──► LSBs ──► TRNG                  │
+│                                 (7.99 bits/byte)               │
 │                                                                │
-│      A ────┬──── rho_AB ────┬──── B ────┬──── rho_BC ────┬──── C
-│            │                │           │                │
-│            └────────────────┴───────────┴────────────────┘
-│                        Moire Pattern                           │
-│                                                                │
-│   Twist: 1.1 deg (empirically optimal)                         │
-│   Like inner ear bones: tiny but incredibly sensitive          │
+│   Memory: 256 bytes    Sample rate: ~650k/s                   │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -28,206 +24,122 @@ Software-only intrusion detection using chaotic oscillator correlation fingerpri
 **Change License:** AGPL 3.0
 
 Free for individuals, DIY, academics, nonprofits, and orgs <$1M revenue.
-Commercial license required for larger organizations.
 
 ## Detection Results
 
-| Workload | Intensity | z-score | Detection |
-|----------|-----------|---------|-----------|
-| Crypto mining | 30% | 2.78 | YES |
-| Crypto mining | 90% | **3.59** | **STRONG** |
-| Memory bandwidth | 50% | **3.09** | **STRONG** |
-
-**Minimum detectable crypto mining: 30% GPU utilization**
-
-## Key Specifications
-
-| Parameter | Value |
-|-----------|-------|
-| Memory footprint | **0.75 KB** |
-| Oscillators | 3 (DOF = 3) |
-| Cells per oscillator | 64 |
-| Iterations per sample | 500 |
-| Twist angle | 1.1 degrees |
-| Sample rate | ~2000 samples/sec |
-| Detection time | < 0.1 seconds |
+| Workload | Timing z-score | Detection |
+|----------|----------------|-----------|
+| 30% load | 0.69 | - |
+| 50% load | 2.02 | YES |
+| 70% load | 4.32 | **STRONG** |
+| 90% load | **8.56** | **STRONG** |
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 pip install cupy-cuda12x numpy scipy
 
-# Run crypto mining detection
+# Recommended: Pure timing-based detection
+python src/timing_sensor.py
+
+# Legacy: Chaotic oscillator (works but unnecessary complexity)
 python experiments/exp26_ossicle_crypto.py
-
-# Run entropy strain measurement
-python experiments/exp25_entropy_strain.py
-
-# Characterize minimum viable antenna
-python experiments/exp24_minimum_antenna.py
 ```
 
-## Capability Summary (Validated January 2026)
+## Usage
 
-| Capability | Status | Evidence |
-|------------|--------|----------|
-| Local tamper detection | **VALIDATED** | p=0.007, mean shift detected |
-| Reset improves sensitivity | **VALIDATED** | p=0.032, 7x improvement |
-| Bounded noise floor | **VALIDATED** | σ=0.003 |
-| Workload type classification | NOT VALIDATED | p=0.49, indistinguishable |
-| Startup transient | NOT DETECTED | p=0.14 |
+```python
+from src.timing_sensor import TimingStrainGauge, TimingTRNG
 
-See `VALIDATION_RESULTS.md` for full null hypothesis test results.
+# Workload detection
+gauge = TimingStrainGauge()
+gauge.calibrate(duration=10.0)  # Run with system idle
+result = gauge.measure(duration=5.0)
+if result.detected:
+    print(f"WORKLOAD DETECTED: z={result.timing_z:.2f}")
+
+# TRNG (von Neumann debiased)
+trng = TimingTRNG()
+random_bytes = trng.generate_bytes(16)
+```
 
 ## How It Works
 
-### The Ossicle Analogy
+Detection is based on **kernel execution timing variance**:
 
-Like the tiny bones in your inner ear (malleus, incus, stapes) that amplify sound vibrations, CIRISOssicle uses **minimal size for maximum sensitivity**.
+1. Run minimal GPU kernel repeatedly
+2. Measure execution time (nanosecond precision)
+3. Under load, timing variance increases due to scheduling contention
+4. Detect via z-score on timing distribution shift
 
-1. **Three coupled chaotic oscillators** run on the GPU
-2. Each oscillator is a 1D cellular automaton with logistic map dynamics
-3. **1.1 degree twist** between oscillators (empirically discovered optimal)
-4. Correlations between oscillators form interference patterns
-5. **Power draw modulates EM coupling** - workloads affect coupling to ambient field
-6. Unauthorized workloads create detectable power-draw signatures
+This is a well-established technique. See Prior Art section.
 
-**Key insight:** The oscillator doesn't detect workloads directly—it detects the workload's effect on local power draw, which modulates coupling to the ambient EM field. This physical side-channel is hard to spoof.
+## Key Specs
 
-### Twist Angle
+| Sensor | Memory | Sample Rate | Detection (90% load) |
+|--------|--------|-------------|---------------------|
+| **TimingSensor** | 256 B | ~650k/s | z=8.56 |
+| OssicleKernel (legacy) | 768 B | ~2k/s | z=3.50 |
 
-The 1.1 degree twist angle was discovered empirically to be optimal on RTX 4090. The numerical coincidence with graphene's "magic angle" is noted but **not proven to be causally related** - it may be coincidental.
+## Prior Art
 
-- Creates interference patterns in correlation space
-- Amplifies sensitivity to PDN perturbations
-- Optimal angle varies by platform (~0.5 deg on Jetson Orin)
+This project builds on established research:
 
-### Physical Mechanism
+| Work | Year | Relevance |
+|------|------|-----------|
+| [US9459834B2](https://patents.google.com/patent/US9459834) | 2011 | GPU TRNG via timing (expired 2024) |
+| [GPUs and chaos: TRNG](https://link.springer.com/article/10.1007/s11071-015-2287-7) | 2015 | Chaos + timing for RNG |
+| [ShadowScope](https://arxiv.org/abs/2509.00300) | 2025 | GPU monitoring via side channels |
+| [GPU Cryptojacking Detection](https://dl.acm.org/doi/10.1145/3577923.3583655) | 2023 | ML-based detection |
 
-```
-Unauthorized GPU workload (crypto mining)
-    → Power draw pattern changes
-    → Modulates coupling to ambient EM field
-    → Oscillator correlation structure shifts
-    → z-score > 2.0
-    → DETECTED!
-```
+**What's different here:** Lightweight implementation (256 bytes), no CUPTI/nvidia-smi dependency, dual-purpose (TRNG + detection).
 
-This is a **physical side-channel** that:
-- Can't be spoofed by software-only attacks
-- Is hard to mask without affecting the malicious workload
-- Works regardless of what the unauthorized code is doing logically
+## Research History
 
-## Related Projects
+This project originally hypothesized that chaotic oscillators could detect PDN (Power Delivery Network) voltage changes through "correlation fingerprinting." Experiments revealed:
 
-- **CIRISArray** - Research implementation for searching correlations across multiple ossicles. Enables spatial mapping and multi-sensor detection.
+| Original Claim | Experimental Result |
+|----------------|---------------------|
+| PDN voltage coupling | NOT VALIDATED - cross-GPU test showed 100% algorithmic |
+| "Magic angle" (1.1°) matters | IRRELEVANT - detection identical at 0°, 45°, 90° |
+| Correlations encode physical state | FALSE - correlations are purely mathematical |
+| Timing is the signal | **VALIDATED** - 3.2x more sensitive than correlations |
 
-## Use Cases
-
-- **Cloud GPU security** - Detect if your rented GPU is being hijacked for mining
-- **Tamper-evident AI inference** - Verify no unauthorized code runs alongside your model
-- **GPU integrity monitoring** - Continuous interference detection
-- **Shared compute environments** - Detect resource theft in multi-tenant systems
+The detection capability is real, but the mechanism is simpler than originally thought: it's just timing variance from GPU scheduling contention.
 
 ## Limitations
 
-CIRISOssicle does NOT detect:
-- Workloads using <30% GPU (below detection threshold)
-- CPU-only attacks (no GPU PDN impact)
+Does NOT detect:
+- Workloads using <50% GPU (below reliable threshold)
+- CPU-only attacks
 - Attacks when sensor isn't running
-- Power-matched evasion by sophisticated attackers
+- Timing-aware evasion by sophisticated attackers
 
-See `THREAT_MODEL.md` for complete security analysis.
+## Related Projects
 
-## Experiments
-
-| Experiment | Purpose |
-|------------|---------|
-| exp26_ossicle_crypto.py | Crypto mining detection |
-| exp25_entropy_strain.py | Entropic/negentropic strain measurement |
-| exp24_minimum_antenna.py | Minimum viable sensor characterization |
-| exp22_7osc_prime.py | 7-oscillator (DOF=21) magic angle discovery |
-| exp19_magic_configuration.py | Quadrature (90 deg) twist testing |
-
-## Research Highlights
-
-### Discovery Path
-
-1. **exp9-10**: Tamper detection demonstrated with larger sensors
-2. **exp19-20**: Magic angle (90 deg quadrature) improves detection 21x
-3. **exp21-22**: At DOF=21 (7 oscillators), optimal twist = 1.1 deg (graphene magic angle!)
-4. **exp24**: Smaller sensors are MORE sensitive - ossicle hypothesis confirmed
-5. **exp25**: Sensor measures entropic strain through moire pattern deformation
-6. **exp26**: Crypto mining detectable at 30% GPU utilization
-
-### Key Findings
-
-- **Smaller is better**: 0.75KB sensor outperforms larger configurations
-- **1.1 degree optimal twist**: Empirically discovered (correlation with graphene magic angle is unproven)
-- **Interference patterns**: Correlation patterns show workload-dependent shifts
-- **Entropic strain**: Can distinguish ordered vs disordered workloads
-
-## Platform-Specific Configurations
-
-| Platform | Cells | Iterations | Twist | Memory | z-score |
-|----------|-------|------------|-------|--------|---------|
-| **RTX 4090** (4nm) | 64 | 500 | 1.1 deg | 0.75 KB | 3.59 |
-| **Jetson Orin** (8nm) | 256 | 2000 | 0.5 deg | 3 KB | 3.55 |
-
-The optimal twist angle appears to vary by platform (~1.1 deg for 4nm, ~0.5 deg for 8nm). The relationship to process node is observed but not explained.
+| Project | Description |
+|---------|-------------|
+| **RATCHET** | GPU Lorenz oscillator research (same findings) |
+| **CIRISArray** | Multi-sensor detection |
 
 ## Requirements
 
-- NVIDIA GPU with CUDA support
+- NVIDIA GPU with CUDA
 - CuPy (`pip install cupy-cuda12x`)
 - NumPy, SciPy
 
-**Tested on:** RTX 4090 (16GB), Jetson Orin (8GB)
-
-## Documentation
-
-| File | Contents |
-|------|----------|
-| `CLAUDE.md` | Project overview and quick reference |
-| `PHYSICS_SUMMARY.md` | Physical mechanism details |
-| `FORMAL_MODEL_UPDATE.md` | Mathematical model and theorems |
-| `THREAT_MODEL.md` | What we detect/don't detect, security properties |
-| `PRIOR_ART.md` | Timestamped innovation claims |
-| `HYPOTHESES.md` | Research hypotheses |
-
 ## Why "Ossicle"?
 
-The ossicles are the three smallest bones in the human body, located in the middle ear:
-- **Malleus** (hammer)
-- **Incus** (anvil)
-- **Stapes** (stirrup)
-
-Despite their tiny size (~3mm), they amplify sound vibrations 20x before transmitting to the cochlea. CIRISOssicle follows the same principle: **minimum size, maximum sensitivity**.
-
-Our 0.75KB sensor (3 oscillators x 64 cells x 4 bytes) achieves z-scores > 3.5 for crypto mining detection - better than sensors 10x larger.
-
-## Research Status
-
-**This is experimental, research-grade software.**
-
-| Aspect | Status |
-|--------|--------|
-| Detection mechanism | Empirically validated |
-| Optimal parameters | Discovered through experimentation |
-| 1.1° twist angle | Observed correlation with graphene magic angle, **causation unproven** |
-| Platform scaling | Observed pattern, mechanism not established |
-| PDN coupling theory | Hypothesized, not directly measured |
-
-The software works (detects crypto mining with z > 3), but the underlying physics is not fully understood. Use accordingly.
+The ossicles are tiny bones in the middle ear that amplify vibrations. The name reflects the original goal of maximum sensitivity from minimum size. While the physics hypothesis didn't pan out, the principle of lightweight detection remains.
 
 ## Citation
 
 ```bibtex
 @software{cirisossicle2026,
-  title = {CIRISOssicle: Sub-Kilobyte GPU Tamper Detection},
+  title = {CIRISOssicle: GPU Workload Detection via Timing},
   author = {CIRIS L3C},
   year = {2026},
-  license = {BSL-1.1}
+  license = {BSL-1.1},
+  note = {Based on prior art in GPU timing side-channels}
 }
 ```

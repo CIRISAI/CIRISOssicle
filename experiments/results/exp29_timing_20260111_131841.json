@@ -1,0 +1,88 @@
+{
+  "experiment": "exp29_timing_ossicle",
+  "timestamp": "2026-01-11T13:18:11.849831",
+  "baseline": {
+    "timing_mean": 93355.33854466205,
+    "timing_std": 7448.605829316525,
+    "corr_mean": 0.0008321170208338565,
+    "corr_std": 0.0023632139705553256,
+    "n_samples": 66074
+  },
+  "tests": [
+    {
+      "name": "idle",
+      "intensity": 0,
+      "timing_mean_us": 92.40020343779163,
+      "timing_std_us": 2.3094535864316166,
+      "timing_z": 0.12823005120114758,
+      "timing_var_ratio": 0.31005179215444256,
+      "timing_detected": false,
+      "corr_mean": -0.004036938518926032,
+      "corr_z": 2.0603532309923343,
+      "corr_detected": true,
+      "timing_lsb_entropy": 7.9946016242993645,
+      "n_samples": 33219,
+      "sample_rate": 6643.8
+    },
+    {
+      "name": "load_30%",
+      "intensity": 0.3,
+      "timing_mean_us": 98.45987956608367,
+      "timing_std_us": 4.886007023620078,
+      "timing_z": 0.6853015367427505,
+      "timing_var_ratio": 0.655962623822774,
+      "timing_detected": false,
+      "corr_mean": 0.00011216095903192798,
+      "corr_z": 0.30465123800565036,
+      "corr_detected": false,
+      "timing_lsb_entropy": 7.991289749310064,
+      "n_samples": 22585,
+      "sample_rate": 4517.0
+    },
+    {
+      "name": "load_50%",
+      "intensity": 0.5,
+      "timing_mean_us": 108.38034662453829,
+      "timing_std_us": 6.1418576093305,
+      "timing_z": 2.0171570927730125,
+      "timing_var_ratio": 0.8245647239322461,
+      "timing_detected": true,
+      "corr_mean": -0.0012314650350609532,
+      "corr_z": 0.8732099935114609,
+      "corr_detected": false,
+      "timing_lsb_entropy": 7.99215621609447,
+      "n_samples": 22471,
+      "sample_rate": 4494.2
+    },
+    {
+      "name": "load_70%",
+      "intensity": 0.7,
+      "timing_mean_us": 125.54426885327992,
+      "timing_std_us": 4.830511634148893,
+      "timing_z": 4.321470493434807,
+      "timing_var_ratio": 0.6485121840031821,
+      "timing_detected": true,
+      "corr_mean": 0.00044772596648619267,
+      "corr_z": 0.16265605194325114,
+      "corr_detected": false,
+      "timing_lsb_entropy": 7.992245384492993,
+      "n_samples": 19970,
+      "sample_rate": 3994.0
+    },
+    {
+      "name": "load_90%",
+      "intensity": 0.9,
+      "timing_mean_us": 157.13748725680236,
+      "timing_std_us": 9.678192094087846,
+      "timing_z": 8.562964690802128,
+      "timing_var_ratio": 1.299329339726372,
+      "timing_detected": true,
+      "corr_mean": -0.0074364788722792625,
+      "corr_z": 3.4988773746839783,
+      "corr_detected": true,
+      "timing_lsb_entropy": 7.986886048201711,
+      "n_samples": 13929,
+      "sample_rate": 2785.8
+    }
+  ]
+}

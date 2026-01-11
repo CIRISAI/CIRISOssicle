@@ -2,77 +2,85 @@
 
 ## Overview
 
-This directory contains experiments that led to the development of **CIRISOssicle** - a 0.75KB GPU tamper detection sensor.
+This directory contains experiments that led to the development and characterization of CIRISOssicle - a GPU workload detector.
 
-## Key Experiments
+## Key Findings (January 2026)
 
-### CIRISOssicle (Current)
+| Experiment | Finding |
+|------------|---------|
+| **exp28** | Correlations are 100% ALGORITHMIC (not physical) |
+| **exp29** | Timing is 3.2x more sensitive than correlations |
+| **exp30** | Twist angle is IRRELEVANT to detection |
 
-| Experiment | Purpose | Key Finding |
-|------------|---------|-------------|
-| **exp26_ossicle_crypto.py** | Crypto mining detection | z=3.59 at 90% crypto |
-| **exp25_entropy_strain.py** | Moire pattern entropy | Entropic vs negentropic strain |
-| **exp24_minimum_antenna.py** | Minimum viable sensor | 0.75KB achieves z=4.25 |
+These findings led to the recommendation to use `TimingSensor` instead of the chaotic oscillator approach.
 
-### Magic Angle Discovery
+## Current Experiments
 
-| Experiment | Purpose | Key Finding |
-|------------|---------|-------------|
-| exp22_7osc_prime.py | 7-oscillator (DOF=21) | **1.1 deg magic angle** |
-| exp21_8osc_magic_angle.py | 8-oscillator testing | 0.55 deg optimal |
-| exp19_magic_configuration.py | Quadrature (90 deg) | 21x amplification |
-
-### Foundation
+### Validation (Recommended)
 
 | Experiment | Purpose | Key Finding |
 |------------|---------|-------------|
-| exp10_llm_tamper.py | LLM-scale detection | Works at inference scale |
-| exp9_tamper_detector.py | Real-time tamper detection | 0.1s detection time |
-| exp8_workload_fingerprint.py | Workload classification | Different fingerprints |
+| **exp28_cross_gpu_coherence.py** | Test algorithmic vs physical | 100% algorithmic |
+| **exp29_timing_ossicle.py** | Compare timing vs correlations | Timing 3.2x better |
+| **exp30_twist_angle_test.py** | Test if angle matters | Angle irrelevant |
+
+### Detection (Working but Superseded)
+
+| Experiment | Purpose | Notes |
+|------------|---------|-------|
+| exp26_ossicle_crypto.py | Crypto mining detection | Works, but use TimingSensor |
+| exp24_minimum_antenna.py | Minimum viable sensor | Superseded by TimingSensor |
+
+### Legacy (Historical Interest Only)
+
+| Experiment | Original Purpose | Status |
+|------------|------------------|--------|
+| exp25_entropy_strain.py | "Entropy" measurement | INVALIDATED - no physical basis |
+| exp22_7osc_prime.py | "Magic angle" discovery | INVALIDATED - angle irrelevant |
+| exp21_8osc_magic_angle.py | 8-oscillator testing | INVALIDATED |
+| exp19_magic_configuration.py | Quadrature testing | INVALIDATED |
 
 ## Quick Start
 
 ```bash
-# Run the main crypto detection experiment
+# Recommended: Use the timing sensor directly
+python ../src/timing_sensor.py
+
+# Validation experiments
+python exp28_cross_gpu_coherence.py
+python exp29_timing_ossicle.py
+python exp30_twist_angle_test.py
+
+# Legacy (still works, just unnecessary complexity)
 python exp26_ossicle_crypto.py
-
-# Characterize minimum viable sensor
-python exp24_minimum_antenna.py
-
-# Measure entropy strain
-python exp25_entropy_strain.py
 ```
 
-## Experiment History
-
-1. **exp1-4**: Initial sensor characterization and parameter sweeps
-2. **exp5-6**: PDN voltage noise discovery, spatial distribution
-3. **exp7-8**: Noise floor characterization, workload fingerprinting
-4. **exp9-10**: Tamper detection demonstrated
-5. **exp11-14**: Formal model validation, tetrahedral sensor
-6. **exp15-18**: Probe characterization, relative detection
-7. **exp19-20**: Magic angle (90 deg quadrature) discovery
-8. **exp21-22**: DOF scaling, 1.1 deg magic angle at DOF=21
-9. **exp23**: Fractal/hierarchical oscillator arrays
-10. **exp24**: Minimum viable sensor (ossicle hypothesis confirmed)
-11. **exp25**: Entropic/negentropic strain via moire patterns
-12. **exp26**: Crypto mining detection with ossicle
-
-## CIRISOssicle Configuration
+## Recommended Configuration
 
 ```python
-OssicleKernel(
-    n_cells=64,
-    n_iterations=500,
-    n_oscillators=3,  # DOF = 3
-    twist_deg=1.1,    # Magic angle
-    r_base=3.70,
-    spacing=0.03,
-    coupling=0.05
-)
+# NEW: Pure timing-based detection (recommended)
+from src.timing_sensor import TimingStrainGauge
+
+gauge = TimingStrainGauge()  # 256 bytes, ~650k samples/sec
+gauge.calibrate(duration=10.0)
+result = gauge.measure(duration=5.0)
+
+# LEGACY: Chaotic oscillator (works but unnecessary)
+from src.ossicle import OssicleKernel
+
+kernel = OssicleKernel()  # 768 bytes, ~2k samples/sec
 ```
 
-**Memory: 0.75 KB** (3 oscillators × 64 cells × 4 bytes)
+## Research History
+
+The project went through several phases:
+
+1. **exp1-10**: Initial development, assumed PDN voltage coupling
+2. **exp11-22**: "Magic angle" and "entropy" hypotheses
+3. **exp24-26**: Minimum sensor, crypto detection (empirically validated)
+4. **exp28-30**: Mechanism investigation - discovered timing is the real signal
+
+The final experiments (28-30) revealed that the original physics hypothesis was incorrect, but detection still works via timing variance.
 
 ## Results Directory
 

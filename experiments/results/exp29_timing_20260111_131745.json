@@ -1,0 +1,19 @@
+{
+  "experiment": "exp29_timing_ossicle",
+  "timestamp": "2026-01-11T13:17:16.145445",
+  "baseline": {
+    "timing_mean": 93157.42907833139,
+    "timing_std": 6451.701169720932,
+    "corr_mean": -0.0028967333791398253,
+    "corr_std": 0.0018048122742404741,
+    "n_samples": 67074
+  },
+  "tests": [
+    {
+      "name": "idle",
+      "intensity": 0,
+      "timing_mean_us": 92.26534677682035,
+      "timing_std_us": 2.276452420567037,
+      "timing_z": 0.13827086500809263,
+      "timing_var_ratio": 0.3528452978031382,
+      "timing_detected": 

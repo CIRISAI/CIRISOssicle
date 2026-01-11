@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-CIRISOssicle - GPU Tamper Detection Sensor
+CIRISOssicle - GPU Tamper Detection Sensor (LEGACY)
 
-A 0.75KB GPU sensor that detects unauthorized workloads through
-correlation fingerprinting of chaotic oscillators.
+DEPRECATION NOTICE:
+    This module is kept for backward compatibility.
+    For new code, use timing_sensor.py which is simpler and more sensitive.
 
-VALIDATED FEATURES (January 2026, RTX 4090):
-1. Local tamper detection - correlation mean shifts under workload (p=0.007)
-2. Reset strategy - 7x sensitivity improvement with periodic resets (p=0.032)
-3. Bounded noise floor - σ ≈ 0.003
+    Experimental findings (January 2026):
+    - Cross-GPU test: Correlations are 100% ALGORITHMIC (not physical)
+    - Timing comparison: TimingSensor is 3.2x more sensitive
+    - Twist angle test: Angle is IRRELEVANT to detection
 
-EMPIRICAL SENSITIVITY (validated):
-- Minimum detectable: ~60% GPU intensity at 2σ with ~50% per-trial detection
-- Mean shifts negative under workload (Δ ≈ -0.008)
-- Variance increases 5.5x under workload (key detection signal!)
-- Detection is PROBABILISTIC - use multi-trial accumulation for reliability
+    The chaotic oscillator adds complexity without benefit.
+    Detection actually works via kernel timing variance, not PDN coupling.
 
-See VALIDATION_RESULTS.md for full null hypothesis test methodology.
+See: src/timing_sensor.py for the recommended implementation.
 
 Author: CIRIS L3C (Eric Moore)
 License: BSL 1.1
@@ -39,14 +37,14 @@ VALIDATED_WORKLOAD_VARIANCE_RATIO = 5.5  # Variance increases 5.5x under load
 
 @dataclass
 class OssicleConfig:
-    """Configuration for the ossicle sensor."""
+    """Configuration for the ossicle sensor (LEGACY - use TimingSensor instead)."""
     n_cells: int = 64
     n_iterations: int = 500
     n_oscillators: int = 3
-    twist_deg: float = 1.1      # Empirically optimal angle
+    twist_deg: float = 1.1      # DEPRECATED: Proven irrelevant (exp30)
     r_base: float = 3.70        # Base bifurcation parameter
     spacing: float = 0.03       # Spacing between oscillator r values
-    coupling: float = 0.05      # Coupling strength (epsilon)
+    coupling: float = 0.05      # Coupling strength
 
     # Detection thresholds (based on validated noise floor)
     z_threshold: float = 2.0    # 2σ detection
@@ -126,10 +124,13 @@ class StatisticalResult:
 
 class OssicleKernel:
     """
-    Core CUDA kernel for the ossicle sensor.
+    Core CUDA kernel for the ossicle sensor (LEGACY).
 
-    Uses 3 coupled chaotic oscillators with 1.1 degree twist angle.
-    Memory footprint: 0.75 KB (3 oscillators × 64 cells × 4 bytes).
+    NOTE: This implementation is kept for backward compatibility.
+    Use TimingSensor from timing_sensor.py for new code.
+
+    The chaotic oscillator works but is unnecessary - detection
+    is actually from kernel timing variance, not PDN coupling.
     """
 
     KERNEL_CODE = r'''
@@ -650,10 +651,13 @@ class OssicleDetector:
 
 
 def demo():
-    """Quick demonstration of the ossicle detector."""
+    """Quick demonstration of the ossicle detector (LEGACY)."""
     print("=" * 70)
-    print("CIRISOssicle TAMPER DETECTOR DEMO")
+    print("CIRISOssicle TAMPER DETECTOR DEMO (LEGACY)")
     print("=" * 70)
+    print()
+    print("NOTE: This is the legacy chaotic oscillator implementation.")
+    print("      For better performance, use: python src/timing_sensor.py")
     print()
 
     config = OssicleConfig()
@@ -661,7 +665,6 @@ def demo():
     print(f"  Memory footprint: {config.memory_kb:.2f} KB")
     print(f"  Oscillators: {config.n_oscillators}")
     print(f"  Cells per oscillator: {config.n_cells}")
-    print(f"  Twist angle: {config.twist_deg}°")
     print()
 
     detector = OssicleDetector(config)

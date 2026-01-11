@@ -11,113 +11,168 @@ BSL text: https://mariadb.com/bsl11/
 
 ## What is CIRISOssicle?
 
-A **0.75KB GPU sensor** that detects unauthorized workloads (crypto mining, resource hijacking) using chaotic oscillator correlation fingerprinting. Named after the inner ear ossicles - tiny bones that are incredibly sensitive to vibration.
+A **GPU workload detector** that identifies unauthorized workloads (crypto mining, resource hijacking) using kernel execution timing. Named after the inner ear ossicles - tiny bones that are incredibly sensitive to vibration.
 
-> **Experimental/Research-Grade:** Detection works empirically but underlying physics not fully understood.
+> **Research Update (January 2026):** Mechanism reframed based on experimental evidence. Detection works via **timing**, not PDN voltage coupling as originally hypothesized.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    HOW DETECTION ACTUALLY WORKS                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   Kernel ──► Timing (ns) ──┬──► Variance Shift ──► DETECTION   │
+│                            │    (z=8.56 @ 90% load)             │
+│                            │                                    │
+│                            └──► LSB Extract ──► TRNG            │
+│                                 (7.99 bits/byte)                │
+│                                                                 │
+│   NOT: PDN voltage → chaotic divergence → correlation shift    │
+│   YES: Workload → timing contention → variance increase        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Capability Summary (Validated January 2026)
 
 | Capability | Status | Evidence |
 |------------|--------|----------|
-| Local tamper detection | **VALIDATED** | p=0.007, mean shift detected |
-| Reset improves sensitivity | **VALIDATED** | p=0.032, 7x improvement |
-| Bounded noise floor | **VALIDATED** | σ=0.003 |
-| Workload type classification | NOT VALIDATED | p=0.49, indistinguishable |
-| Startup transient | NOT DETECTED | p=0.14 |
-| Cross-device transmission | FALSE | Not tested |
+| Workload detection (timing) | **VALIDATED** | z=8.56 at 90% load |
+| TRNG from timing LSBs | **VALIDATED** | 7.99 bits/byte entropy |
+| Cross-GPU coherence | **100% ALGORITHMIC** | Identical on RTX 4090 & Jetson |
+| Twist angle relevance | **IRRELEVANT** | Detection identical at 0°, 45°, 90° |
+| PDN voltage coupling | **NOT VALIDATED** | No evidence of chaotic amplification |
 
-**Key insight:** Detects power-draw signatures. Reset between measurements improves sensitivity 7x.
+## Key Experimental Findings
 
-See `VALIDATION_RESULTS.md` for full test methodology and results.
-
+### Exp 28: Cross-GPU Coherence Test
 ```
-     ┌─────────────────────────────────────────┐
-     │  CIRISOssicle: 3 oscillators, 0.75 KB   │
-     │                                         │
-     │    A ──┬── rho_AB ──┬── B ──┬── rho_BC ──┬── C
-     │        │            │      │            │
-     │        └────────────┴──────┴────────────┘
-     │              Interference Pattern
-     │                                         │
-     │  Twist angle: 1.1 deg (empirical)       │
-     │  Detection: z > 3.0 for crypto mining   │
-     └─────────────────────────────────────────┘
+RTX 4090 vs Jetson Orin with identical seeds:
+  seed=42:   -0.020063 vs -0.020063  EXACT MATCH
+  seed=123:  -0.011182 vs -0.011182  EXACT MATCH
+  ...
+
+RESULT: Correlation structure is 100% ALGORITHMIC
+        Not from hardware/PDN differences
 ```
+
+### Exp 29: Timing vs Correlation Comparison
+```
+                Timing z    Correlation z
+idle            0.13        2.06
+load_30%        0.69        0.30
+load_50%        2.02        0.87
+load_70%        4.32        0.16
+load_90%        8.56        3.50
+
+RESULT: Timing is 3.2x MORE SENSITIVE than correlations
+```
+
+### Exp 30: Twist Angle Test
+```
+Timing delta under 70% load:
+  0.0°  → +23.3 μs
+  1.1°  → +27.0 μs  (the "magic angle")
+  45.0° → +27.6 μs
+  90.0° → +27.2 μs
+
+RESULT: Twist angle is IRRELEVANT (std = 1.42 μs)
+```
+
+## Recommended Architecture
+
+Based on experimental evidence, use `TimingSensor` (cleaner, simpler):
+
+```python
+from src.timing_sensor import TimingStrainGauge, TimingTRNG
+
+# Strain gauge for workload detection (256 bytes, ~650k samples/sec)
+gauge = TimingStrainGauge()
+gauge.calibrate(duration=10.0)
+result = gauge.measure(duration=5.0)
+if result.detected:
+    print(f"WORKLOAD DETECTED: z={result.timing_z:.2f}")
+
+# TRNG with von Neumann debiasing
+trng = TimingTRNG()
+random_bytes = trng.generate_bytes(16)
+```
+
+The original `OssicleKernel` with chaotic oscillators still works but adds unnecessary complexity.
 
 ## Key Specs
 
-| Parameter | Value |
-|-----------|-------|
-| Memory footprint | **0.75 KB** |
-| Oscillators | 3 |
-| Cells per oscillator | 64 |
-| Iterations per sample | 500 |
-| Twist angle | 1.1 deg |
-| Sample rate | ~2000/s |
-| Detection time | < 0.1 seconds |
-| Crypto detection | z=3.59 at 90% intensity |
-| Min detectable crypto | 30% GPU utilization |
+| Sensor | Memory | Sample Rate | Detection (90% load) |
+|--------|--------|-------------|---------------------|
+| TimingSensor | **256 B** | ~650k/s | z=8.56 |
+| OssicleKernel | 768 B | ~2k/s | z=3.50 |
 
 ## Quick Start
 
 ```bash
-# Crypto mining detection with ossicle
+# NEW: Pure timing-based detection (recommended)
+python src/timing_sensor.py
+
+# Legacy: Chaotic oscillator detection
 python experiments/exp26_ossicle_crypto.py
 
-# Entropy strain measurement
-python experiments/exp25_entropy_strain.py
+# Cross-GPU coherence test
+python experiments/exp28_cross_gpu_coherence.py
 
-# Minimum antenna characterization
-python experiments/exp24_minimum_antenna.py
+# Timing vs correlation comparison
+python experiments/exp29_timing_ossicle.py
+
+# Twist angle relevance test
+python experiments/exp30_twist_angle_test.py
 ```
-
-## How It Works
-
-1. Three coupled chaotic oscillators with **1.1 degree twist** (empirically optimal)
-2. Correlation structure encodes GPU PDN (Power Delivery Network) voltage noise
-3. Unauthorized workloads shift correlations detectably
-4. Like inner ear ossicles: tiny size amplifies sensitivity
-
-## Detection Results
-
-| Workload | z-score | Detection |
-|----------|---------|-----------|
-| crypto_30% | 2.78 | YES |
-| crypto_90% | **3.59** | STRONG |
-| memory_50% | **3.09** | STRONG |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `experiments/exp26_ossicle_crypto.py` | Crypto mining detection |
-| `experiments/exp25_entropy_strain.py` | Moire pattern entropy measurement |
-| `experiments/exp24_minimum_antenna.py` | Minimum viable sensor characterization |
-| `PHYSICS_SUMMARY.md` | Technical documentation |
-| `FORMAL_MODEL_UPDATE.md` | Mathematical model |
+| `src/timing_sensor.py` | **Pure timing-based sensor (recommended)** |
+| `src/ossicle.py` | Original chaotic oscillator sensor |
+| `experiments/exp28_cross_gpu_coherence.py` | Cross-GPU test |
+| `experiments/exp29_timing_ossicle.py` | Timing vs correlation comparison |
+| `experiments/exp30_twist_angle_test.py` | Twist angle relevance test |
+
+## What We Learned
+
+### Original Hypothesis (INVALIDATED)
+- PDN voltage noise couples to chaotic oscillators
+- Twist angle creates interference pattern
+- Correlations encode physical state
+
+### Actual Mechanism (VALIDATED)
+- Workloads cause kernel timing contention
+- Timing variance increases under load
+- Chaotic oscillator acts as timing-sensitive sampler
+- Twist angle is irrelevant
+
+### Why Detection Still Works
+The oscillator provides a consistent workload to time. Any GPU kernel would work - the chaos is incidental, not causal.
+
+## Prior Art
+
+This project builds on established research:
+
+| Work | Year | Description |
+|------|------|-------------|
+| [US9459834B2](https://patents.google.com/patent/US9459834) | 2011 | GPU TRNG via timing/temperature (expired 2024) |
+| [GPUs and chaos: TRNG](https://link.springer.com/article/10.1007/s11071-015-2287-7) | 2015 | Chaos + GPU timing for RNG (447 Mbit/s) |
+| [ShadowScope](https://arxiv.org/abs/2509.00300) | 2025 | GPU monitoring via CUPTI side channels |
+| [GPU Cryptojacking Detection](https://dl.acm.org/doi/10.1145/3577923.3583655) | 2023 | ML-based GPU workload detection |
+
+**What's different here:** Lightweight (256 bytes), no CUPTI/nvidia-smi, dual-purpose (TRNG + detection).
 
 ## Related Projects
 
-- **CIRISArray** - Research implementation for searching correlations across multiple ossicles. Enables spatial mapping and multi-sensor detection.
+| Project | Description |
+|---------|-------------|
+| **RATCHET** | GPU Lorenz oscillator research (same timing findings) |
+| **CIRISArray** | Multi-sensor spatial detection |
 
-## Platform-Specific Configurations
+## Honest Science
 
-### RTX 4090 (4nm Ada Lovelace)
-```python
-OssicleKernel(n_cells=64, n_iterations=500, twist_deg=1.1)  # 0.75 KB
-```
+This documentation was updated when experimental evidence contradicted the original PDN coupling hypothesis. The detection capability is real and validated, but the mechanism explanation has been corrected.
 
-### Jetson Orin (8nm Tegra Ampere)
-```python
-OssicleKernel(n_cells=256, n_iterations=2000, twist_deg=0.5)  # 3 KB
-```
-
-## Physics (Hypothesized)
-
-The ossicle appears to exploit interference effects:
-- Optimal twist angle varies with platform (1.1 deg on 4nm, 0.5 deg on 8nm)
-- Creates interference pattern in correlation space
-- PDN noise shifts the pattern detectably
-- Smaller sensor = higher sensitivity (like ossicles!)
-
-**Note:** The similarity to graphene's magic angle is observed correlation, not proven causation.
+> "The first principle is that you must not fool yourself - and you are the easiest person to fool." - Richard Feynman
