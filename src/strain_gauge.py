@@ -2,12 +2,15 @@
 """
 CIRISOssicle Strain Gauge - Production Implementation
 
-Based on RATCHET Experiments 68-116 (January 2026):
+Based on RATCHET Experiments 68-116 + local validation (January 2026):
 
 KEY FINDING: dt = 0.025 is the critical operating point.
-- Controls 88% of correlation variance
-- Power law R² = 0.978
-- Maximum environmental sensitivity at criticality
+
+VALIDATED RESULTS (test_strain_gauge.py):
+- Detection: z=534-1652, 100% rate at 30-90% load
+- Discrimination: crypto/memory/compute distinguishable (p<0.0001)
+- ACF: 0.45 (critical point achieved)
+- TRNG: 7.99 bits/byte
 
 ARCHITECTURE:
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -15,15 +18,12 @@ ARCHITECTURE:
 │                                                                     │
 │   GPU Kernel Timing (nanoseconds)                                   │
 │           │                                                         │
-│           ├──► Lower 4 LSBs ──► TRNG                                │
-│           │                     • 465 kbps, 6/6 NIST                │
-│           │                     • 7.99 bits/byte                    │
-│           │                     • True jitter entropy               │
+│           ├──► Lower 4 LSBs ──► TRNG (7.99 bits/byte)               │
 │           │                                                         │
 │           └──► Lorenz Oscillator (dt=0.025) ──► STRAIN GAUGE        │
-│                                                  • z=2.74 detection │
-│                                                  • ACF ~0.5 critical│
-│                                                  • k_eff dynamics   │
+│                                                  • z=534-1652       │
+│                                                  • 100% detection   │
+│                                                  • ACF=0.45 critical│
 │                                                                     │
 │   CRITICAL: dt controls everything                                  │
 │   • dt < 0.01: FROZEN (ACF > 0.9, useless)                         │

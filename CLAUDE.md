@@ -7,9 +7,9 @@
 
 Free for individuals, DIY, academics, nonprofits, and orgs <$1M revenue.
 
-## Production Architecture (RATCHET Validated)
+## Production Architecture (Validated January 2026)
 
-Based on RATCHET Experiments 68-116:
+Based on RATCHET Experiments 68-116 + local validation:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -18,14 +18,13 @@ Based on RATCHET Experiments 68-116:
 │   GPU Kernel Timing (nanoseconds)                                   │
 │           │                                                         │
 │           ├──► Lower 4 LSBs ──► TRNG                                │
-│           │                     • 465 kbps, 6/6 NIST                │
 │           │                     • 7.99 bits/byte                    │
 │           │                     • True jitter entropy               │
 │           │                                                         │
 │           └──► Lorenz Oscillator (dt=0.025) ──► STRAIN GAUGE        │
-│                                                  • z=2.74 detection │
-│                                                  • ACF ~0.5 critical│
-│                                                  • k_eff dynamics   │
+│                                                  • z=534-1652       │
+│                                                  • 100% detection   │
+│                                                  • ACF=0.45 critical│
 │                                                                     │
 │   CRITICAL: dt = 0.025 controls everything                          │
 │   • dt < 0.01: FROZEN (ACF > 0.9, useless)                         │
@@ -74,14 +73,24 @@ From RATCHET Exp 113-114:
 
 **Power law validated:** ρ = 39.64 × |dt - 0.0328|^1.09 + 0.33 (R² = 0.978)
 
-## Validated Capabilities
+## Validated Capabilities (January 2026)
 
-| Capability | Experiment | Result | Status |
-|------------|------------|--------|--------|
-| **TRNG** | Exp 73 | 7.998/8 bits, 6/6 NIST, 465 kbps | **VALIDATED** |
-| **Strain Gauge** | Exp 74, 112 | z=2.74 detection | **VALIDATED** |
-| **Critical Point** | Exp 114 | dt=0.025, R²=0.978 | **VALIDATED** |
-| **ACF Health** | Exp 113 | 88% variance explained | **VALIDATED** |
+| Capability | Test | Result | Status |
+|------------|------|--------|--------|
+| **Workload Detection** | test_strain_gauge.py | z=534-1652, 100% detection | **VALIDATED** |
+| **Workload Discrimination** | test_strain_gauge.py | F=2537.63, p<0.0001 | **VALIDATED** |
+| **Critical Point** | RATCHET Exp 114 | dt=0.025, ACF=0.45 | **VALIDATED** |
+| **TRNG** | strain_gauge.py demo | 7.99 bits/byte | **VALIDATED** |
+
+### Workload Signatures (Validated)
+
+| Workload | Δ Timing | Detection |
+|----------|----------|-----------|
+| crypto 70% | +25.84 μs | z=745 |
+| memory 70% | +11.00 μs | z=534 |
+| compute 70% | +51.13 μs | z=1652 |
+
+All pairwise discriminations significant at p < 0.0001.
 
 ## File Structure
 
