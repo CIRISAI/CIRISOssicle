@@ -1,12 +1,36 @@
 # RATCHET Validated Findings for CIRISOssicle
 
-## Updated January 2026 (Experiments 68-116)
+## Updated January 2026 (Experiments 68-116 + Array Validation)
 
 ---
 
-## THE KEY FINDING
+## THE KEY FINDINGS
 
-**dt_crit is THERMALLY DEPENDENT** - use ACF feedback, not fixed dt.
+### 1. dt_crit is THERMALLY DEPENDENT
+Use ACF feedback, not fixed dt.
+
+### 2. Distribution is STUDENT-T, NOT GAUSSIAN
+- Kurtosis κ = 230 (validated: 229.8)
+- Student-t df ≈ 1.3 (validated: 1.34)
+- Detection works via rare extreme spikes (fat tails)
+
+---
+
+## FAT-TAIL DISTRIBUTION (test_fat_tails.py)
+
+| Assumption | Gaussian | Actual (Student-t) |
+|------------|----------|-------------------|
+| Kurtosis | 0 | 230 |
+| Degrees of freedom | ∞ | 1.3 |
+| Tail behavior | Thin | Extremely fat |
+| Detection mechanism | Mean shift | Rare spikes |
+| z=534 probability | Impossible | Expected |
+
+**Why z=534-1652 works:** With fat tails, extreme values are much more probable than Gaussian predicts. Detection catches these rare spikes.
+
+---
+
+## THERMAL SELF-TUNING
 
 ```python
 # OLD (fixed dt - WRONG)

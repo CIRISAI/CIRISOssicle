@@ -4,14 +4,16 @@ CIRISOssicle Strain Gauge - Production Implementation
 
 Based on RATCHET Experiments 68-116 + local validation (January 2026):
 
-KEY FINDING: Use ACF feedback to maintain criticality.
-- dt_crit is THERMALLY DEPENDENT: warm GPU ≈ 0.025, cold GPU ≈ 0.030
-- ACF feedback loop auto-tunes dt regardless of thermal state
+KEY FINDINGS:
+1. ACF feedback for thermal stability (dt_crit is thermally dependent)
+2. Student-t distribution (κ=230, df≈1.3), NOT Gaussian
+3. Detection via rare extreme spikes (fat tails), not mean shift
 
-VALIDATED RESULTS (test_strain_gauge.py):
+VALIDATED RESULTS:
 - Detection: z=534-1652, 100% rate at 30-90% load
 - Discrimination: crypto/memory/compute distinguishable (p<0.0001)
-- ACF: 0.45 (critical point achieved)
+- ACF: 0.453 (critical point)
+- Kurtosis: 229.8 (extremely fat tails)
 - TRNG: 7.99 bits/byte
 
 ARCHITECTURE:
@@ -24,14 +26,13 @@ ARCHITECTURE:
 │           │                                                         │
 │           └──► Lorenz Oscillator ──► STRAIN GAUGE                   │
 │                     │                  • z=534-1652                 │
-│                     │                  • 100% detection             │
+│                     │                  • Student-t (κ=230)          │
 │                     ▼                  • ACF=0.45 critical          │
 │               ACF Feedback                                          │
 │               (auto-tunes dt for thermal drift)                     │
 │                                                                     │
-│   ACF TARGET: 0.5 (criticality)                                     │
-│   • ACF > 0.55: increase dt (too frozen)                           │
-│   • ACF < 0.35: decrease dt (too chaotic)                          │
+│   DISTRIBUTION: Student-t with df≈1.3 (NOT Gaussian)                │
+│   Detection works via rare extreme spikes (fat tails)               │
 └─────────────────────────────────────────────────────────────────────┘
 
 Author: CIRIS L3C (Eric Moore)
@@ -55,7 +56,11 @@ class StrainGaugeConfig:
     """
     Configuration for production strain gauge.
 
-    CRITICAL PARAMETER: dt = 0.025 for optimal sensitivity.
+    CRITICAL PARAMETERS:
+    - dt: 0.025 for optimal sensitivity (auto-tunes via ACF feedback)
+    - Distribution: Student-t (κ=230, df≈1.3), NOT Gaussian
+
+    Detection works via rare extreme spikes (fat tails), not mean shift.
     """
     # Lorenz oscillator parameters (VALIDATED)
     dt: float = 0.025           # CRITICAL - controls phase (0.025 = critical point)
@@ -70,11 +75,17 @@ class StrainGaugeConfig:
     # TRNG parameters (VALIDATED: 4 LSBs optimal)
     trng_bits: int = 4          # Lower 4 bits = true jitter
 
-    # Detection thresholds
-    z_threshold: float = 2.0    # 2σ detection
-    acf_target: float = 0.5     # Target ACF at criticality
-    acf_frozen: float = 0.8     # ACF > this = frozen
-    acf_chaotic: float = 0.3    # ACF < this = chaotic
+    # Detection thresholds (adjusted for Student-t fat tails)
+    # With κ=230, df≈1.3: use higher thresholds than Gaussian
+    z_threshold: float = 5.0    # Higher threshold for fat-tailed distribution
+    acf_target: float = 0.45    # Target ACF at criticality (validated: 0.453)
+    acf_frozen: float = 0.55    # ACF > this = frozen, increase dt
+    acf_chaotic: float = 0.35   # ACF < this = chaotic, decrease dt
+
+    # Distribution parameters (from test_fat_tails.py validation)
+    # z-scores are Student-t, NOT Gaussian
+    expected_kurtosis: float = 230.0    # Validated: 229.8
+    student_t_df: float = 1.3           # Validated: 1.34
 
     # Warm-up (from Array characterization)
     warm_up_duration: float = 30.0
