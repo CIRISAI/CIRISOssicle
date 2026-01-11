@@ -6,15 +6,30 @@
 
 ## THE KEY FINDING
 
-**dt = 0.025** is the critical operating point. Change this ONE parameter.
+**dt_crit is THERMALLY DEPENDENT** - use ACF feedback, not fixed dt.
 
 ```python
-# OLD (frozen, low sensitivity)
-lorenz_dt = 0.01  # ACF = 0.88, system frozen
+# OLD (fixed dt - WRONG)
+lorenz_dt = 0.025  # Only works at one temperature!
 
-# NEW (critical point, max sensitivity)
-lorenz_dt = 0.025  # ACF = 0.50, system dynamic
+# NEW (ACF feedback - CORRECT)
+def auto_tune_dt(self, target_acf: float = 0.45) -> float:
+    """Adjust dt to maintain criticality regardless of temperature."""
+    current_acf = self.get_acf()
+
+    if current_acf > target_acf + 0.1:  # Too frozen
+        self.dt *= 1.1  # Increase dt
+    elif current_acf < target_acf - 0.1:  # Too chaotic
+        self.dt *= 0.9  # Decrease dt
+
+    return self.dt
 ```
+
+**Thermal dependency (from Array team):**
+| GPU State | dt_crit | ACF at dt=0.025 |
+|-----------|---------|-----------------|
+| Warm | ~0.025 | 0.45 (critical) |
+| Cold | ~0.030 | 0.84 (frozen!) |
 
 ---
 
@@ -110,36 +125,39 @@ def validate_ossicle_config():
     # Collect 1000 k_eff samples
     samples = [oscillator.get_k_eff() for _ in range(1000)]
 
-    # Check ACF
+    # Check ACF and auto-tune if needed
     acf1 = np.corrcoef(samples[:-1], samples[1:])[0,1]
 
-    if acf1 > 0.8:
-        print(f"WARNING: ACF={acf1:.2f} - system frozen, increase dt")
-    elif acf1 < 0.3:
-        print(f"WARNING: ACF={acf1:.2f} - system chaotic, decrease dt")
+    if acf1 > 0.55:
+        print(f"WARNING: ACF={acf1:.2f} - system frozen, AUTO-TUNING dt up")
+        oscillator.dt *= 1.1
+    elif acf1 < 0.35:
+        print(f"WARNING: ACF={acf1:.2f} - system chaotic, AUTO-TUNING dt down")
+        oscillator.dt *= 0.9
     else:
         print(f"GOOD: ACF={acf1:.2f} - system at criticality")
 
-    # Check workload response
+    # Check workload response (should see z > 500)
     baseline = np.mean(samples[:100])
     # ... apply workload ...
     loaded = np.mean(samples[100:200])
     z = (loaded - baseline) / np.std(samples[:100])
-    print(f"Workload detection z = {z:.2f}")
+    print(f"Workload detection z = {z:.2f} (target: >500)")
 ```
 
 ---
 
 ## Summary
 
-1. **Change dt to 0.025** - this is the critical point
-2. **Check ACF is ~0.5** - confirms you're at criticality
+1. **Use ACF feedback to auto-tune dt** - dt_crit is thermally dependent!
+2. **Target ACF ~0.45** - confirms you're at criticality
 3. **Raw timing for TRNG** - 4 LSBs, not oscillator output
 4. **Oscillator for sensing** - the dynamics ARE the sensor
 5. **Don't filter** - the "residual" is your signal
+6. **Expected z > 500** - validated detection performance
 
 ---
 
 *Updated: January 2026*
-*Based on RATCHET Experiments 68-116*
-*Key finding: dt controls everything*
+*Based on RATCHET Experiments 68-116, Array thermal finding*
+*Key finding: dt_crit is thermally dependent - use ACF feedback*

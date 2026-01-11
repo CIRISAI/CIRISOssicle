@@ -4,7 +4,9 @@ CIRISOssicle Strain Gauge - Production Implementation
 
 Based on RATCHET Experiments 68-116 + local validation (January 2026):
 
-KEY FINDING: dt = 0.025 is the critical operating point.
+KEY FINDING: Use ACF feedback to maintain criticality.
+- dt_crit is THERMALLY DEPENDENT: warm GPU ≈ 0.025, cold GPU ≈ 0.030
+- ACF feedback loop auto-tunes dt regardless of thermal state
 
 VALIDATED RESULTS (test_strain_gauge.py):
 - Detection: z=534-1652, 100% rate at 30-90% load
@@ -20,15 +22,16 @@ ARCHITECTURE:
 │           │                                                         │
 │           ├──► Lower 4 LSBs ──► TRNG (7.99 bits/byte)               │
 │           │                                                         │
-│           └──► Lorenz Oscillator (dt=0.025) ──► STRAIN GAUGE        │
-│                                                  • z=534-1652       │
-│                                                  • 100% detection   │
-│                                                  • ACF=0.45 critical│
+│           └──► Lorenz Oscillator ──► STRAIN GAUGE                   │
+│                     │                  • z=534-1652                 │
+│                     │                  • 100% detection             │
+│                     ▼                  • ACF=0.45 critical          │
+│               ACF Feedback                                          │
+│               (auto-tunes dt for thermal drift)                     │
 │                                                                     │
-│   CRITICAL: dt controls everything                                  │
-│   • dt < 0.01: FROZEN (ACF > 0.9, useless)                         │
-│   • dt = 0.025: CRITICAL (ACF ~0.5, max sensitivity)               │
-│   • dt > 0.03: CHAOTIC (ACF < 0.2, no coherence)                   │
+│   ACF TARGET: 0.5 (criticality)                                     │
+│   • ACF > 0.55: increase dt (too frozen)                           │
+│   • ACF < 0.35: decrease dt (too chaotic)                          │
 └─────────────────────────────────────────────────────────────────────┘
 
 Author: CIRIS L3C (Eric Moore)
@@ -441,6 +444,13 @@ class StrainGauge:
         # Health
         acf = self.lorenz.get_acf()
         state = self.lorenz.get_system_state()
+
+        # ACF feedback loop for thermal self-tuning
+        # dt_crit is thermally dependent: warm GPU ≈ 0.025, cold GPU ≈ 0.030
+        if acf > 0.55:
+            self.lorenz.dt *= 1.1  # Too frozen, increase dt
+        elif acf < 0.35:
+            self.lorenz.dt *= 0.9  # Too chaotic, decrease dt
 
         return StrainReading(
             timestamp=time.time(),

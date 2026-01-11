@@ -61,17 +61,27 @@ trng = gauge.generate_trng(16)
 print(f"Random: {trng.bytes.hex()}")
 ```
 
-## Key Finding: dt Controls Everything
+## Key Finding: ACF Feedback for Thermal Stability
 
-From RATCHET Exp 113-114:
+**CAUTION:** dt_crit is thermally dependent!
+- Warm GPU: dt ≈ 0.025
+- Cold GPU: dt ≈ 0.030
 
-| dt | ACF | State | Use |
-|----|-----|-------|-----|
-| < 0.01 | > 0.9 | FROZEN | ❌ Useless |
-| **0.025** | **~0.5** | **CRITICAL** | ✅ Max sensitivity |
-| > 0.03 | < 0.2 | CHAOTIC | ❌ No coherence |
+The system auto-tunes via ACF feedback loop:
 
-**Power law validated:** ρ = 39.64 × |dt - 0.0328|^1.09 + 0.33 (R² = 0.978)
+```python
+# In read() - automatic thermal compensation
+if acf > 0.55:
+    self.dt *= 1.1  # Too frozen, increase dt
+elif acf < 0.35:
+    self.dt *= 0.9  # Too chaotic, decrease dt
+```
+
+| ACF | State | Action |
+|-----|-------|--------|
+| > 0.55 | FROZEN | increase dt |
+| 0.35-0.55 | CRITICAL | optimal |
+| < 0.35 | CHAOTIC | decrease dt |
 
 ## Validated Capabilities (January 2026)
 
