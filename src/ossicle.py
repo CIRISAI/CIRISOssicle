@@ -5,14 +5,10 @@ CIRISOssicle - GPU Tamper Detection Sensor
 A 0.75KB GPU sensor that detects unauthorized workloads through
 correlation fingerprinting of chaotic oscillators.
 
-VALIDATED FEATURES (January 2026):
+VALIDATED FEATURES (January 2026, RTX 4090):
 1. Local tamper detection - correlation mean shifts under workload (p=0.007)
 2. Reset strategy - 7x sensitivity improvement with periodic resets (p=0.032)
 3. Bounded noise floor - σ ≈ 0.003
-
-NOT VALIDATED (removed from claims):
-- Workload type classification (crypto vs memory indistinguishable, p=0.49)
-- Startup transient (no variance difference detected, p=0.14)
 
 See VALIDATION_RESULTS.md for full null hypothesis test methodology.
 
@@ -23,19 +19,12 @@ License: BSL 1.1
 import numpy as np
 import cupy as cp
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict
-from enum import Enum
-import json
-from pathlib import Path
 
 
-class WorkloadType(Enum):
-    """Classification of detected workload types."""
-    BASELINE = "baseline"
-    NEGENTROPIC = "negentropic"  # Coherent: matrix ops, inference (4x response)
-    ENTROPIC = "entropic"        # Incoherent: random memory, crypto (1x response)
-    UNKNOWN = "unknown"
+# Validated noise floor from testing
+VALIDATED_NOISE_FLOOR = 0.003
 
 
 @dataclass
@@ -44,22 +33,14 @@ class OssicleConfig:
     n_cells: int = 64
     n_iterations: int = 500
     n_oscillators: int = 3
-    twist_deg: float = 1.1          # Magic angle (empirically optimal)
-    r_base: float = 3.70
-    spacing: float = 0.03
-    coupling: float = 0.05          # Epsilon - EM coupling strength
+    twist_deg: float = 1.1      # Empirically optimal angle
+    r_base: float = 3.70        # Base bifurcation parameter
+    spacing: float = 0.03       # Spacing between oscillator r values
+    coupling: float = 0.05      # Coupling strength (epsilon)
 
-    # Timing parameters
-    startup_transient_sec: float = 2.0   # Discard samples during warmup
-    reset_interval_sec: float = 20.0     # Reset to maintain sensitivity
-
-    # Classification thresholds
-    negentropic_threshold: float = 0.15  # High spectral power = negentropic
-    entropic_threshold: float = 0.05     # Low spectral power = entropic
-
-    # Detection thresholds
-    z_threshold: float = 2.0             # Detection threshold (sigma)
-    z_strong: float = 3.0                # Strong detection threshold
+    # Detection thresholds (based on validated noise floor)
+    z_threshold: float = 2.0    # 2σ detection
+    z_strong: float = 3.0       # 3σ strong detection
 
     @property
     def memory_bytes(self) -> int:
@@ -71,34 +52,31 @@ class OssicleConfig:
 
 
 @dataclass
-class OssicleReading:
-    """Single sensor reading with all computed metrics."""
+class Detection:
+    """Detection result from the sensor."""
     timestamp: float
+    mean_correlation: float
+    z_score: float
+    detected: bool
+    strong: bool
+
+    # Raw oscillator means
     mean_a: float
     mean_b: float
     mean_c: float
 
-    # Correlations
-    rho_ab: float = 0.0
-    rho_bc: float = 0.0
-    rho_ac: float = 0.0
-
-    # Detection metrics
-    z_score: float = 0.0
-    detected: bool = False
-    strong_detection: bool = False
-
-    # Classification
-    workload_type: WorkloadType = WorkloadType.UNKNOWN
-    spectral_power: float = 0.0  # 0.1-0.5 Hz band power
+    # Individual correlations
+    rho_ab: float
+    rho_bc: float
+    rho_ac: float
 
 
 class OssicleKernel:
     """
     Core CUDA kernel for the ossicle sensor.
 
-    Uses 3 coupled chaotic oscillators with 1.1 degree twist angle
-    to create moire interference patterns sensitive to EM coupling changes.
+    Uses 3 coupled chaotic oscillators with 1.1 degree twist angle.
+    Memory footprint: 0.75 KB (3 oscillators × 64 cells × 4 bytes).
     """
 
     KERNEL_CODE = r'''
@@ -165,14 +143,19 @@ class OssicleKernel:
         self.kernel = self.module.get_function('ossicle_step')
 
         # Initialize states
-        self._init_states()
+        self.reset()
 
         # Execution config
         self.block_size = 64
         self.grid_size = (cfg.n_cells + self.block_size - 1) // self.block_size
 
-    def _init_states(self):
-        """Initialize oscillator states with random values."""
+    def reset(self):
+        """
+        Reset oscillator states.
+
+        IMPORTANT: Validated to improve sensitivity by 7x (p=0.032).
+        Call this between measurement trials for best detection.
+        """
         n = self.config.n_cells
         self.state_a = cp.random.uniform(0.1, 0.9, n, dtype=cp.float32)
         self.state_b = cp.random.uniform(0.1, 0.9, n, dtype=cp.float32)
@@ -198,132 +181,54 @@ class OssicleKernel:
             float(cp.mean(self.state_c))
         )
 
-    def reset(self):
-        """Reset oscillator states to maintain sensitivity."""
-        self._init_states()
-
 
 class OssicleDetector:
     """
-    Full-featured tamper detection using the ossicle sensor.
+    Tamper detection using the ossicle sensor.
 
-    Features:
-    - Startup transient handling
-    - Periodic reset for continuous sensitivity
-    - Workload classification using 4:1 asymmetry
-    - Spectral analysis for environmental sensing
+    Validated methodology:
+    1. Reset oscillator states before each measurement trial
+    2. Collect samples for several seconds
+    3. Compute mean correlation across oscillator pairs
+    4. Compare to baseline using z-score
+    5. Detect if |z| > threshold
+
+    Usage:
+        detector = OssicleDetector()
+        baseline = detector.calibrate(duration=30)
+
+        # Later, to detect tampering:
+        result = detector.measure(duration=5)
+        if result.detected:
+            print(f"TAMPER DETECTED: z={result.z_score:.2f}")
     """
 
     def __init__(self, config: OssicleConfig = None):
         self.config = config or OssicleConfig()
         self.kernel = OssicleKernel(self.config)
 
-        # Timing
-        self.start_time: Optional[float] = None
-        self.last_reset_time: Optional[float] = None
-        self.in_transient: bool = True
-
-        # History for correlation/spectral analysis
-        self.history_a: List[float] = []
-        self.history_b: List[float] = []
-        self.history_c: List[float] = []
-        self.timestamps: List[float] = []
-
         # Baseline statistics
         self.baseline_mean: Optional[float] = None
         self.baseline_std: Optional[float] = None
-        self.is_calibrated: bool = False
 
-    def start(self):
-        """Start the detector, initializing timing."""
-        self.start_time = time.time()
-        self.last_reset_time = self.start_time
-        self.in_transient = True
-        self.kernel.reset()
-        self._clear_history()
+    def _collect_samples(self, duration: float) -> Tuple[List[float], List[float], List[float]]:
+        """Collect oscillator samples for specified duration."""
+        history_a, history_b, history_c = [], [], []
+        start = time.time()
 
-    def _clear_history(self):
-        """Clear history buffers."""
-        self.history_a.clear()
-        self.history_b.clear()
-        self.history_c.clear()
-        self.timestamps.clear()
+        while time.time() - start < duration:
+            a, b, c = self.kernel.step()
+            history_a.append(a)
+            history_b.append(b)
+            history_c.append(c)
 
-    def _check_reset(self) -> bool:
-        """Check if reset is needed and perform it."""
-        now = time.time()
+        return history_a, history_b, history_c
 
-        # Check if still in startup transient
-        if self.start_time and now - self.start_time < self.config.startup_transient_sec:
-            self.in_transient = True
-            return False
-        else:
-            self.in_transient = False
-
-        # Check if periodic reset is needed
-        if self.last_reset_time and now - self.last_reset_time > self.config.reset_interval_sec:
-            self.kernel.reset()
-            self.last_reset_time = now
-            self._clear_history()
-            return True
-
-        return False
-
-    def step(self) -> OssicleReading:
-        """Take a single reading with all processing."""
-        now = time.time()
-
-        # Initialize if needed
-        if self.start_time is None:
-            self.start()
-
-        # Check for reset
-        did_reset = self._check_reset()
-
-        # Get raw reading
-        a, b, c = self.kernel.step()
-
-        # Store in history
-        self.history_a.append(a)
-        self.history_b.append(b)
-        self.history_c.append(c)
-        self.timestamps.append(now)
-
-        # Create reading
-        reading = OssicleReading(
-            timestamp=now,
-            mean_a=a,
-            mean_b=b,
-            mean_c=c
-        )
-
-        # Skip processing during transient
-        if self.in_transient:
-            return reading
-
-        # Compute correlations if we have enough data
-        if len(self.history_a) >= 50:
-            reading.rho_ab, reading.rho_bc, reading.rho_ac = self._compute_correlations()
-
-        # Compute spectral power for classification
-        if len(self.history_a) >= 100:
-            reading.spectral_power = self._get_band_power(0.1, 0.5)
-            reading.workload_type = self._classify_workload(reading.spectral_power)
-
-        # Compute z-score if calibrated
-        if self.is_calibrated and self.baseline_std > 0:
-            mean_corr = (reading.rho_ab + reading.rho_bc + reading.rho_ac) / 3
-            reading.z_score = abs(mean_corr - self.baseline_mean) / self.baseline_std
-            reading.detected = reading.z_score > self.config.z_threshold
-            reading.strong_detection = reading.z_score > self.config.z_strong
-
-        return reading
-
-    def _compute_correlations(self) -> Tuple[float, float, float]:
-        """Compute correlation coefficients between oscillators."""
-        arr_a = np.array(self.history_a)
-        arr_b = np.array(self.history_b)
-        arr_c = np.array(self.history_c)
+    def _compute_correlations(self, ha: List[float], hb: List[float], hc: List[float]) -> Tuple[float, float, float]:
+        """Compute pairwise correlations between oscillators."""
+        arr_a = np.array(ha)
+        arr_b = np.array(hb)
+        arr_c = np.array(hc)
 
         def safe_corr(x, y):
             if np.std(x) < 1e-10 or np.std(y) < 1e-10:
@@ -337,230 +242,173 @@ class OssicleDetector:
             safe_corr(arr_a, arr_c)
         )
 
-    def _get_band_power(self, low_hz: float, high_hz: float) -> float:
-        """Get spectral power in the specified frequency band."""
-        if len(self.history_a) < 100:
-            return 0.0
-
-        # Estimate sample rate from timestamps
-        if len(self.timestamps) < 2:
-            return 0.0
-
-        dt = np.mean(np.diff(self.timestamps))
-        if dt <= 0:
-            return 0.0
-
-        fs = 1.0 / dt
-
-        # Combine oscillator signals
-        signal = np.array(self.history_a) - np.mean(self.history_a)
-
-        # FFT
-        n = len(signal)
-        fft = np.fft.rfft(signal)
-        freqs = np.fft.rfftfreq(n, d=dt)
-        power = np.abs(fft) ** 2
-
-        # Band power
-        band_mask = (freqs >= low_hz) & (freqs <= high_hz)
-        if not np.any(band_mask):
-            return 0.0
-
-        band_power = np.sum(power[band_mask]) / np.sum(power)
-        return float(band_power)
-
-    def _classify_workload(self, spectral_power: float) -> WorkloadType:
+    def calibrate(self, duration: float = 30.0, n_trials: int = 10) -> Dict:
         """
-        Classify workload based on spectral power.
+        Calibrate baseline with multiple trials.
 
-        Negentropic (coherent) workloads show 4x stronger response in 0.1-0.5 Hz band.
-        Entropic (incoherent) workloads show weaker response.
+        IMPORTANT: Run with NO concurrent workloads.
+
+        Args:
+            duration: Duration per trial in seconds
+            n_trials: Number of trials (more = better statistics)
+
+        Returns:
+            Dict with baseline_mean, baseline_std, n_trials
         """
-        if spectral_power > self.config.negentropic_threshold:
-            return WorkloadType.NEGENTROPIC
-        elif spectral_power < self.config.entropic_threshold:
-            return WorkloadType.ENTROPIC
-        else:
-            return WorkloadType.BASELINE
+        print(f"Calibrating baseline ({n_trials} trials, {duration}s each)...")
+        print("Keep system IDLE during calibration.")
 
-    def calibrate(self, duration: float = 30.0) -> Dict:
-        """
-        Calibrate baseline statistics.
-
-        Run this with no concurrent workloads to establish baseline.
-        """
-        print(f"Calibrating for {duration}s (keep system idle)...")
-
-        self.start()
-
-        # Wait for transient
-        print(f"  Waiting {self.config.startup_transient_sec}s for startup transient...")
-        time.sleep(self.config.startup_transient_sec + 0.5)
-
-        # Collect samples
         correlations = []
-        start = time.time()
-        sample_count = 0
 
-        while time.time() - start < duration:
-            reading = self.step()
-            if not self.in_transient and len(self.history_a) >= 50:
-                mean_corr = (reading.rho_ab + reading.rho_bc + reading.rho_ac) / 3
-                correlations.append(mean_corr)
-                sample_count += 1
+        for i in range(n_trials):
+            # Reset before each trial (validated 7x improvement)
+            self.kernel.reset()
 
-            if sample_count > 0 and sample_count % 100 == 0:
-                print(f"  Collected {sample_count} samples...")
+            # Collect samples
+            ha, hb, hc = self._collect_samples(duration)
 
-        if len(correlations) < 10:
-            raise RuntimeError("Not enough samples for calibration")
+            # Compute mean correlation
+            rho_ab, rho_bc, rho_ac = self._compute_correlations(ha, hb, hc)
+            mean_corr = (rho_ab + rho_bc + rho_ac) / 3
+            correlations.append(mean_corr)
+
+            print(f"  Trial {i+1}/{n_trials}: corr = {mean_corr:.6f}")
 
         self.baseline_mean = float(np.mean(correlations))
         self.baseline_std = float(np.std(correlations))
-        self.is_calibrated = True
 
-        print(f"Calibration complete:")
-        print(f"  Samples: {len(correlations)}")
-        print(f"  Mean correlation: {self.baseline_mean:.6f}")
-        print(f"  Std correlation: {self.baseline_std:.6f}")
+        # Use validated noise floor if measured std is too small
+        if self.baseline_std < VALIDATED_NOISE_FLOOR / 2:
+            self.baseline_std = VALIDATED_NOISE_FLOOR
+
+        print(f"\nCalibration complete:")
+        print(f"  Mean: {self.baseline_mean:.6f}")
+        print(f"  Std:  {self.baseline_std:.6f}")
+        print(f"  2σ threshold: ±{2*self.baseline_std:.6f}")
+        print(f"  3σ threshold: ±{3*self.baseline_std:.6f}")
 
         return {
             'baseline_mean': self.baseline_mean,
             'baseline_std': self.baseline_std,
-            'n_samples': len(correlations)
+            'n_trials': n_trials
         }
 
     def set_baseline(self, mean: float, std: float):
         """Set baseline statistics directly."""
         self.baseline_mean = mean
-        self.baseline_std = std
-        self.is_calibrated = True
+        self.baseline_std = std if std > 0 else VALIDATED_NOISE_FLOOR
 
-
-class MultiEpsilonArray:
-    """
-    Array of ossicle sensors with different coupling strengths.
-
-    Different epsilon values provide different sensitivity/response tradeoffs:
-    - Low epsilon (0.03): High sensitivity, slower response
-    - Medium epsilon (0.05): Balanced (default)
-    - High epsilon (0.10): Low sensitivity, faster response
-
-    Using multiple sensors enables better workload discrimination.
-    """
-
-    DEFAULT_COUPLINGS = [0.03, 0.05, 0.10]
-
-    def __init__(self, couplings: List[float] = None, base_config: OssicleConfig = None):
-        self.couplings = couplings or self.DEFAULT_COUPLINGS
-        self.detectors: List[OssicleDetector] = []
-
-        base = base_config or OssicleConfig()
-
-        for coupling in self.couplings:
-            config = OssicleConfig(
-                n_cells=base.n_cells,
-                n_iterations=base.n_iterations,
-                twist_deg=base.twist_deg,
-                r_base=base.r_base,
-                spacing=base.spacing,
-                coupling=coupling,
-                startup_transient_sec=base.startup_transient_sec,
-                reset_interval_sec=base.reset_interval_sec
-            )
-            self.detectors.append(OssicleDetector(config))
-
-    def start(self):
-        """Start all detectors."""
-        for det in self.detectors:
-            det.start()
-
-    def step(self) -> List[OssicleReading]:
-        """Take readings from all detectors."""
-        return [det.step() for det in self.detectors]
-
-    def calibrate(self, duration: float = 30.0) -> List[Dict]:
-        """Calibrate all detectors."""
-        results = []
-        for i, det in enumerate(self.detectors):
-            print(f"\nCalibrating sensor {i+1}/{len(self.detectors)} (epsilon={self.couplings[i]})...")
-            results.append(det.calibrate(duration))
-        return results
-
-    def get_consensus_detection(self, readings: List[OssicleReading]) -> Tuple[bool, float]:
+    def measure(self, duration: float = 5.0) -> Detection:
         """
-        Get consensus detection across all sensors.
+        Take a measurement and check for tampering.
 
-        Returns (detected, max_z_score).
+        IMPORTANT: Resets oscillator state before measuring (validated 7x improvement).
+
+        Args:
+            duration: Measurement duration in seconds
+
+        Returns:
+            Detection result with z-score and detection flags
         """
-        detected = any(r.detected for r in readings)
-        max_z = max((r.z_score for r in readings), default=0.0)
-        return detected, max_z
+        if self.baseline_mean is None:
+            raise RuntimeError("No baseline. Call calibrate() first.")
 
-    def get_workload_consensus(self, readings: List[OssicleReading]) -> WorkloadType:
+        # Reset before measurement (validated 7x improvement)
+        self.kernel.reset()
+
+        # Collect samples
+        ha, hb, hc = self._collect_samples(duration)
+
+        # Compute correlations
+        rho_ab, rho_bc, rho_ac = self._compute_correlations(ha, hb, hc)
+        mean_corr = (rho_ab + rho_bc + rho_ac) / 3
+
+        # Compute z-score
+        z_score = abs(mean_corr - self.baseline_mean) / self.baseline_std
+
+        # Detection
+        detected = z_score > self.config.z_threshold
+        strong = z_score > self.config.z_strong
+
+        return Detection(
+            timestamp=time.time(),
+            mean_correlation=mean_corr,
+            z_score=z_score,
+            detected=detected,
+            strong=strong,
+            mean_a=np.mean(ha),
+            mean_b=np.mean(hb),
+            mean_c=np.mean(hc),
+            rho_ab=rho_ab,
+            rho_bc=rho_bc,
+            rho_ac=rho_ac
+        )
+
+    def monitor(self, interval: float = 5.0, callback=None):
         """
-        Get consensus workload classification.
+        Continuous monitoring mode.
 
-        Uses voting across sensors.
+        Args:
+            interval: Measurement interval in seconds
+            callback: Optional callback(detection) for each measurement
         """
-        types = [r.workload_type for r in readings if r.workload_type != WorkloadType.UNKNOWN]
-        if not types:
-            return WorkloadType.UNKNOWN
+        if self.baseline_mean is None:
+            raise RuntimeError("No baseline. Call calibrate() first.")
 
-        # Simple majority vote
-        from collections import Counter
-        counts = Counter(types)
-        return counts.most_common(1)[0][0]
+        print(f"Monitoring (interval={interval}s, threshold={self.config.z_threshold}σ)...")
+        print("Press Ctrl+C to stop.\n")
+
+        try:
+            while True:
+                result = self.measure(interval)
+
+                status = "DETECTED!" if result.detected else "OK"
+                if result.strong:
+                    status = "STRONG DETECTION!"
+
+                print(f"[{time.strftime('%H:%M:%S')}] "
+                      f"corr={result.mean_correlation:+.6f} "
+                      f"z={result.z_score:.2f}σ "
+                      f"{status}")
+
+                if callback:
+                    callback(result)
+
+        except KeyboardInterrupt:
+            print("\nMonitoring stopped.")
 
 
-def quick_test(duration: float = 30.0):
-    """Quick test of the improved ossicle sensor."""
+def demo():
+    """Quick demonstration of the ossicle detector."""
     print("=" * 70)
-    print("CIRISOssicle IMPROVED SENSOR TEST")
+    print("CIRISOssicle TAMPER DETECTOR DEMO")
     print("=" * 70)
     print()
 
     config = OssicleConfig()
     print(f"Configuration:")
-    print(f"  Memory: {config.memory_kb:.2f} KB")
-    print(f"  Cells: {config.n_cells}")
-    print(f"  Iterations: {config.n_iterations}")
-    print(f"  Twist angle: {config.twist_deg} deg")
-    print(f"  Coupling (epsilon): {config.coupling}")
-    print(f"  Startup transient: {config.startup_transient_sec}s")
-    print(f"  Reset interval: {config.reset_interval_sec}s")
+    print(f"  Memory footprint: {config.memory_kb:.2f} KB")
+    print(f"  Oscillators: {config.n_oscillators}")
+    print(f"  Cells per oscillator: {config.n_cells}")
+    print(f"  Twist angle: {config.twist_deg}°")
     print()
 
     detector = OssicleDetector(config)
-    detector.start()
 
-    print(f"Running for {duration}s...")
+    # Calibrate (short for demo)
+    detector.calibrate(duration=3.0, n_trials=5)
     print()
 
-    readings = []
-    start = time.time()
-
-    while time.time() - start < duration:
-        reading = detector.step()
-        readings.append(reading)
-
-        if not detector.in_transient and len(detector.history_a) >= 100:
-            status = "TRANSIENT" if detector.in_transient else "ACTIVE"
-            wl_type = reading.workload_type.value
-            print(f"  [{status}] rho_ab={reading.rho_ab:+.4f} "
-                  f"spectral={reading.spectral_power:.4f} "
-                  f"type={wl_type}")
+    # Take a few measurements
+    print("Taking measurements...")
+    for i in range(3):
+        result = detector.measure(duration=3.0)
+        status = "DETECTED" if result.detected else "clean"
+        print(f"  Measurement {i+1}: z={result.z_score:.2f}σ ({status})")
 
     print()
-    print("Test complete.")
-    print(f"  Total readings: {len(readings)}")
-
-    active_readings = [r for r in readings if r.spectral_power > 0]
-    if active_readings:
-        print(f"  Active readings: {len(active_readings)}")
-        avg_spectral = np.mean([r.spectral_power for r in active_readings])
-        print(f"  Avg spectral power: {avg_spectral:.4f}")
+    print("Demo complete.")
 
 
 if __name__ == "__main__":
-    quick_test()
+    demo()
