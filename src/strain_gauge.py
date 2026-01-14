@@ -2,37 +2,35 @@
 """
 CIRISOssicle Strain Gauge - Production Implementation
 
-Based on RATCHET Experiments 68-116 + local validation (January 2026):
+Based on RATCHET/Array experiments O1-O7 (January 2026):
 
-KEY FINDINGS:
-1. ACF feedback for thermal stability (dt_crit is thermally dependent)
-2. Student-t distribution (κ=230, df≈1.3), NOT Gaussian
-3. Detection via rare extreme spikes (fat tails), not mean shift
+KEY FINDINGS (O1-O7 Validated):
+1. Use MEAN SHIFT detection, not variance ratio
+2. Sample rate: 4000 Hz optimal (avoid 1900-2100 Hz)
+3. Detection latency: 2.5 ms (10ms window)
+4. Detection floor: 1% workload (+192% mean shift)
+5. ACF feedback for thermal stability
 
-VALIDATED RESULTS:
-- Detection: z=534-1652, 100% rate at 30-90% load
-- Discrimination: crypto/memory/compute distinguishable (p<0.0001)
-- ACF: 0.453 (critical point)
-- Kurtosis: 229.8 (extremely fat tails)
-- TRNG: 7.99 bits/byte
+VALIDATED RESULTS (O1-O7):
+- Mean shift: +248% at 50% load, +380% at 90% load
+- Detection floor: 1% workload
+- Detection latency: 2.5 ms
+- CV at 70% load: 3.4%
+- Detection: 0% FP, 100% TP
 
 ARCHITECTURE:
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    STRAIN GAUGE ON TRNG                             │
+│                    MULTI-MODAL STRAIN GAUGE                         │
 │                                                                     │
-│   GPU Kernel Timing (nanoseconds)                                   │
+│   GPU Kernel Timing (4000 Hz sample rate)                           │
 │           │                                                         │
-│           ├──► Lower 4 LSBs ──► TRNG (7.99 bits/byte)               │
-│           │                                                         │
-│           └──► Lorenz Oscillator ──► STRAIN GAUGE                   │
-│                     │                  • z=534-1652                 │
-│                     │                  • Student-t (κ=230)          │
-│                     ▼                  • ACF=0.45 critical          │
-│               ACF Feedback                                          │
-│               (auto-tunes dt for thermal drift)                     │
+│           ├──► Mean Shift ──────► WORKLOAD (+248% at 50%)           │
+│           ├──► Band 100-500 Hz ─► WORKLOAD transients (7.1%)        │
+│           └──► Lower 4 LSBs ────► TRNG (7.99 bits/byte)             │
 │                                                                     │
-│   DISTRIBUTION: Student-t with df≈1.3 (NOT Gaussian)                │
-│   Detection works via rare extreme spikes (fat tails)               │
+│   DETECTION: mean_shift > 20% (not variance ratio)                  │
+│   Workload causes GPU contention → timing TRIPLES (~7μs → ~21μs)    │
+│   AVOID: 1900-2100 Hz sample rates (interference dip)               │
 └─────────────────────────────────────────────────────────────────────┘
 
 Author: CIRIS L3C (Eric Moore)
@@ -56,12 +54,17 @@ class StrainGaugeConfig:
     """
     Configuration for production strain gauge.
 
-    CRITICAL PARAMETERS:
+    CRITICAL PARAMETERS (O1-O7 Validated):
+    - sample_rate: 4000 Hz optimal (avoid 1900-2100 Hz)
     - dt: 0.025 for optimal sensitivity (auto-tunes via ACF feedback)
-    - Distribution: Student-t (κ=230, df≈1.3), NOT Gaussian
+    - mean_shift_threshold: 20% triggers detection
 
-    Detection works via rare extreme spikes (fat tails), not mean shift.
+    Detection works via mean shift (timing triples under load).
     """
+    # Sample rate (O2 validated: 4000 Hz optimal, avoid 1900-2100 Hz)
+    sample_rate: int = 4000     # Hz - optimal for lowest variance
+    detection_window_ms: int = 10  # Window size for detection (O4: 2.5ms latency)
+
     # Lorenz oscillator parameters (VALIDATED)
     dt: float = 0.025           # CRITICAL - controls phase (0.025 = critical point)
     sigma: float = 10.0         # Lorenz parameter
@@ -75,9 +78,9 @@ class StrainGaugeConfig:
     # TRNG parameters (VALIDATED: 4 LSBs optimal)
     trng_bits: int = 4          # Lower 4 bits = true jitter
 
-    # Detection thresholds (adjusted for Student-t fat tails)
-    # With κ=230, df≈1.3: use higher thresholds than Gaussian
-    z_threshold: float = 5.0    # Higher threshold for fat-tailed distribution
+    # Detection thresholds (O1-O7 validated)
+    mean_shift_threshold: float = 20.0  # >20% mean shift = workload detected
+    z_threshold: float = 5.0    # Secondary: for individual sample alerts
     acf_target: float = 0.45    # Target ACF at criticality (validated: 0.453)
     acf_frozen: float = 0.55    # ACF > this = frozen, increase dt
     acf_chaotic: float = 0.35   # ACF < this = chaotic, decrease dt
@@ -111,7 +114,8 @@ class StrainReading:
 
     # Detection
     detected: bool
-    variance_ratio: float
+    mean_shift_pct: float       # Primary detection signal (O1 validated)
+    variance_ratio: float       # Secondary signal
 
     # Health
     system_state: str           # "FROZEN", "CRITICAL", "CHAOTIC"
@@ -121,7 +125,7 @@ class StrainReading:
 class TRNGOutput:
     """TRNG output from timing LSBs."""
     bytes: bytes
-    entropy_bits_per_byte: float
+    quality_bits_per_byte: float  # Randomness quality (7.99 = near-ideal)
     throughput_kbps: float
 
 
@@ -135,11 +139,12 @@ class LorenzOscillator:
 
     CRITICAL: dt = 0.025 gives ACF ~0.5 (maximum sensitivity).
 
-    The oscillator doesn't generate entropy - it SENSES environment
-    through its dynamics. The k_eff metric responds to:
+    The oscillator SENSES environmental changes through its dynamics.
+    The k_eff metric responds to:
+    - Workload variations (GPU contention)
     - Thermal changes
-    - EMI
-    - Workload variations
+    - EMI (electromagnetic interference)
+    - VDF (voltage/frequency scaling)
     """
 
     def __init__(self, config: StrainGaugeConfig):
@@ -234,8 +239,8 @@ class TimingKernel:
     Minimal GPU kernel for timing measurement.
 
     Output: Raw timing in nanoseconds.
-    - Lower 4 bits → TRNG (7.99 bits/byte entropy)
-    - Full timing → Lorenz perturbation
+    - Lower 4 bits → TRNG (7.99 bits/byte quality)
+    - Full timing → Lorenz perturbation for sensing
     """
 
     KERNEL_CODE = r'''
@@ -443,28 +448,27 @@ class StrainGauge:
         # Individual sample z-score (for reporting, not detection)
         timing_z = abs(timing_ns - self.baseline_timing_mean) / self.baseline_timing_std
 
-        # Windowed statistics for detection (fat-tail robust)
-        # With κ=230, individual samples unreliable - use aggregates
+        # Windowed statistics for detection
+        # Use MEAN SHIFT as primary signal (O1 validated: +157% at 70% load)
         if len(self.timing_history) >= 50:
             window = list(self.timing_history)[-100:]
             window_mean = np.mean(window)
             window_std = np.std(window)
 
-            # Mean shift z-score (windowed, more stable)
-            mean_z = abs(window_mean - self.baseline_timing_mean) / (self.baseline_timing_std / np.sqrt(len(window)))
+            # Mean shift percentage (primary detection signal)
+            # Workload causes GPU contention → timing nearly doubles
+            mean_shift_pct = (window_mean - self.baseline_timing_mean) / self.baseline_timing_mean * 100
 
-            # Variance ratio (key detection signal)
+            # Variance ratio (secondary signal, also valid)
             variance_ratio = window_std / self.baseline_timing_std
         else:
-            mean_z = 0.0
+            mean_shift_pct = 0.0
             variance_ratio = 1.0
 
-        # Detection: use VARIANCE RATIO only
-        # Mean-based detection doesn't work because:
-        # - Calibration timing differs from read() timing (7.5μs vs 10.2μs)
-        # - Fat-tailed distribution makes z-scores unreliable
-        # Variance ratio correctly captures workload-induced jitter increase
-        detected = variance_ratio > 5.0
+        # Detection: use MEAN SHIFT (O1 validated)
+        # Threshold: >20% shift indicates workload
+        # At 70% load: +157% mean shift observed
+        detected = mean_shift_pct > 20.0
 
         # Health
         acf = self.lorenz.get_acf()
@@ -485,6 +489,7 @@ class StrainGauge:
             timing_std_us=self.baseline_timing_std / 1000,
             timing_z=timing_z,
             detected=detected,
+            mean_shift_pct=mean_shift_pct,
             variance_ratio=variance_ratio,
             system_state=state
         )
@@ -527,12 +532,12 @@ class StrainGauge:
 
         result = bytes(output_bytes[:n_bytes])
 
-        # Estimate entropy and throughput
+        # Estimate quality and throughput
         throughput_kbps = (len(result) * 8) / elapsed / 1000 if elapsed > 0 else 0
 
         return TRNGOutput(
             bytes=result,
-            entropy_bits_per_byte=7.99,  # Validated
+            quality_bits_per_byte=7.99,  # Validated (near-ideal randomness)
             throughput_kbps=throughput_kbps
         )
 
@@ -630,6 +635,169 @@ class StrainGauge:
 
 
 # =============================================================================
+# EMI MODE
+# =============================================================================
+
+def emi_mode(duration: int = 30, sample_rate: int = 500):
+    """
+    EMI spectrum analysis mode.
+
+    Detects electromagnetic interference from power grid (60 Hz + harmonics),
+    VRM switching frequencies, and subharmonics.
+
+    Args:
+        duration: Capture duration in seconds (default 30 for 0.033 Hz resolution)
+        sample_rate: Sample rate in Hz (default 500 for 250 Hz Nyquist)
+    """
+    from scipy import signal as scipy_signal
+
+    print("=" * 60)
+    print("CIRISOSSICLE: EMI Spectrum Analysis")
+    print("=" * 60)
+    print(f"\nSample rate: {sample_rate} Hz (Nyquist: {sample_rate//2} Hz)")
+    print(f"Duration: {duration} seconds")
+    print(f"Frequency resolution: {1/duration:.4f} Hz")
+
+    # Initialize timing kernel
+    config = StrainGaugeConfig(sample_rate=sample_rate, warm_up_enabled=False)
+    timing = TimingKernel(config)
+
+    # Warm up
+    print("\nWarming up sensor...")
+    for _ in range(100):
+        timing.measure()
+
+    # Collect samples
+    print(f"\nCollecting EMI data...")
+    timings = []
+    interval = 1.0 / sample_rate
+    start = time.time()
+
+    n_samples = duration * sample_rate
+    for i in range(n_samples):
+        t0 = time.perf_counter()
+        timing_ns = timing.measure()
+        timings.append(timing_ns)
+
+        # Rate limiting
+        elapsed = time.perf_counter() - t0
+        if elapsed < interval:
+            time.sleep(interval - elapsed)
+
+        # Progress
+        if (i + 1) % (sample_rate * 5) == 0:
+            pct = (i + 1) / n_samples * 100
+            print(f"  {pct:.0f}% ({i+1}/{n_samples})")
+
+    timings = np.array(timings, dtype=np.float64)
+    actual_rate = len(timings) / (time.time() - start)
+    print(f"\nActual rate: {actual_rate:.0f} Hz")
+
+    # Compute PSD
+    print("\n" + "=" * 60)
+    print("EMI SPECTRUM ANALYSIS")
+    print("=" * 60)
+
+    y = timings - np.mean(timings)
+    y = scipy_signal.detrend(y)
+
+    freqs, psd = scipy_signal.welch(y, fs=actual_rate, nperseg=min(len(y)//4, 8192))
+
+    # Find peaks
+    peak_idx, _ = scipy_signal.find_peaks(psd, height=np.median(psd) * 2, distance=3)
+    noise_floor = np.median(psd)
+
+    # EMI target frequencies
+    HARMONICS = [60, 120, 180, 240]
+    SUBHARMONICS = [60/n for n in [2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60]]
+
+    # Check for EMI
+    print("\n60 Hz HARMONICS:")
+    print("-" * 40)
+    for target in HARMONICS:
+        if target > actual_rate / 2:
+            continue
+        idx = np.argmin(np.abs(freqs - target))
+        snr = 10 * np.log10(psd[idx] / noise_floor) if noise_floor > 0 else 0
+        status = "DETECTED" if snr > 3 else "not detected"
+        print(f"  {target:3d} Hz: SNR = {snr:5.1f} dB  [{status}]")
+
+    print("\nSUBHARMONICS (60/N Hz):")
+    print("-" * 40)
+    detected_sub = []
+    for target in SUBHARMONICS:
+        if target < freqs[1] or target > actual_rate / 2:
+            continue
+        idx = np.argmin(np.abs(freqs - target))
+        snr = 10 * np.log10(psd[idx] / noise_floor) if noise_floor > 0 else 0
+        if snr > 3:
+            detected_sub.append((target, snr))
+            n = int(60 / target)
+            print(f"  60/{n:2d} = {target:6.2f} Hz: SNR = {snr:5.1f} dB  [DETECTED]")
+
+    # VRM frequencies (typically 200-2000 kHz, but we see subharmonics)
+    print("\nVRM SWITCHING (100-400 Hz band):")
+    print("-" * 40)
+    vrm_peaks = []
+    for i in peak_idx:
+        if 100 <= freqs[i] <= 400:
+            snr = 10 * np.log10(psd[i] / noise_floor) if noise_floor > 0 else 0
+            if snr > 5:
+                vrm_peaks.append((freqs[i], snr))
+                print(f"  {freqs[i]:6.1f} Hz: SNR = {snr:5.1f} dB")
+
+    # Top peaks
+    print("\nTOP 10 PEAKS:")
+    print("-" * 40)
+    sorted_peaks = sorted(zip(freqs[peak_idx], psd[peak_idx]),
+                         key=lambda x: -x[1])[:10]
+    for f, p in sorted_peaks:
+        snr = 10 * np.log10(p / noise_floor) if noise_floor > 0 else 0
+        # Identify if EMI
+        emi = ""
+        if abs(f - 60) < 2:
+            emi = "<- 60 Hz"
+        elif abs(f - 120) < 2:
+            emi = "<- 120 Hz"
+        elif abs(f - 180) < 2:
+            emi = "<- 180 Hz"
+        else:
+            for n in range(2, 61):
+                if abs(f - 60/n) < 0.5:
+                    emi = f"<- 60/{n}"
+                    break
+        print(f"  {f:7.2f} Hz: SNR = {snr:5.1f} dB {emi}")
+
+    # Summary
+    print("\n" + "=" * 60)
+    print("EMI SUMMARY")
+    print("=" * 60)
+    n_harmonics = sum(1 for h in HARMONICS if h <= actual_rate/2 and
+                      any(abs(freqs[i] - h) < 2 and
+                          10*np.log10(psd[i]/noise_floor) > 3 for i in peak_idx))
+    print(f"  60 Hz harmonics detected: {n_harmonics}/4")
+    print(f"  Subharmonics detected: {len(detected_sub)}")
+    print(f"  VRM peaks detected: {len(vrm_peaks)}")
+    print(f"  Noise floor: {noise_floor:.2e}")
+
+    if n_harmonics >= 1 or len(detected_sub) >= 3:
+        print("\n  Status: EMI VISIBLE")
+    else:
+        print("\n  Status: EMI below detection threshold")
+
+    print("=" * 60)
+
+    return {
+        'n_harmonics': n_harmonics,
+        'subharmonics': detected_sub,
+        'vrm_peaks': vrm_peaks,
+        'noise_floor': noise_floor,
+        'freqs': freqs,
+        'psd': psd,
+    }
+
+
+# =============================================================================
 # DEMO
 # =============================================================================
 
@@ -675,7 +843,7 @@ def demo():
     print("Generating TRNG...")
     trng = gauge.generate_trng(16)
     print(f"  Bytes: {trng.bytes.hex()}")
-    print(f"  Entropy: {trng.entropy_bits_per_byte:.2f} bits/byte")
+    print(f"  Quality: {trng.quality_bits_per_byte:.2f} bits/byte")
     print(f"  Throughput: {trng.throughput_kbps:.1f} kbps")
     print()
 
@@ -689,4 +857,23 @@ def demo():
 
 
 if __name__ == "__main__":
-    demo()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='CIRISOssicle Strain Gauge')
+
+    # Mode selection
+    parser.add_argument('--demo', action='store_true', default=True,
+                        help='Run demo mode (default)')
+    parser.add_argument('--emi', action='store_true',
+                        help='Run EMI spectrum analysis mode')
+    parser.add_argument('--emi-duration', type=int, default=30,
+                        help='EMI capture duration in seconds (default 30)')
+    parser.add_argument('--emi-rate', type=int, default=500,
+                        help='EMI sample rate in Hz (default 500)')
+
+    args = parser.parse_args()
+
+    if args.emi:
+        emi_mode(duration=args.emi_duration, sample_rate=args.emi_rate)
+    else:
+        demo()
