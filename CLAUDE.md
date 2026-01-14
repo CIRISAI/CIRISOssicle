@@ -13,27 +13,31 @@ Free for individuals, DIY, academics, nonprofits, and orgs <$1M revenue.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MULTI-MODAL STRAIN GAUGE                         │
 │                                                                     │
-│   GPU Kernel Timing ──┬──► WORKLOAD (4000 Hz, mean shift >20%)      │
-│                       │    • +248% at 50% load                      │
-│                       │    • +380% at 90% load                      │
+│   GPU Kernel Timing ──┬──► WORKLOAD [VALIDATED]                     │
+│                       │    • 4000 Hz, mean shift >20%               │
+│                       │    • +248% at 50% load, +380% at 90%        │
 │                       │    • Latency: 2.5 ms, Floor: 1%             │
 │                       │                                             │
-│                       ├──► EMI (500 Hz, --emi mode)                 │
-│                       │    • 60 Hz harmonics (power grid)           │
-│                       │    • Subharmonics (60/N Hz)                 │
-│                       │    • VRM switching (100-400 Hz)             │
+│                       ├──► EMI [THEORIZED]                          │
+│                       │    • 500 Hz sample rate, --emi mode         │
+│                       │    • 60 Hz harmonics, subharmonics, VRM     │
 │                       │                                             │
-│                       ├──► VDF (voltage/frequency scaling)          │
+│                       ├──► VDF [THEORIZED]                          │
+│                       │    • Voltage/frequency scaling              │
 │                       │    • Band 20-100 Hz in spectrum             │
 │                       │                                             │
-│                       ├──► THERMAL (drift over time)                │
-│                       │    • ACF feedback loop for stability        │
+│                       ├──► THERMAL [THEORIZED]                      │
+│                       │    • Drift compensation via ACF feedback    │
 │                       │                                             │
 │                       └──► TRNG (lower 4 LSBs, 7.99 bits/byte)      │
 │                                                                     │
 │   AVOID: 1900-2100 Hz sample rates (interference dip at ~2050 Hz)   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+**Status:**
+- **WORKLOAD**: O1-O7 validated, production ready
+- **EMI/VDF/THERMAL**: Theorized capabilities, not yet experimentally validated
 
 ## Key Specs (O1-O7 Validated)
 
@@ -60,7 +64,9 @@ if reading.detected:
     print(f"WORKLOAD: mean_shift={reading.mean_shift_pct:.1f}%")
 ```
 
-### EMI Mode
+### EMI Mode (Experimental)
+
+**Note:** EMI detection is theorized but not yet validated. The mode exists for experimentation.
 
 ```bash
 # Run EMI spectrum analysis (30s capture at 500 Hz)
@@ -73,7 +79,7 @@ python src/strain_gauge.py --emi --emi-duration 60 --emi-rate 1000
 ```python
 from src.strain_gauge import emi_mode
 
-# Detect power grid harmonics and VRM switching
+# Analyze spectrum for power grid harmonics and VRM switching
 results = emi_mode(duration=30, sample_rate=500)
 print(f"60 Hz harmonics: {results['n_harmonics']}/4")
 print(f"VRM peaks: {len(results['vrm_peaks'])}")

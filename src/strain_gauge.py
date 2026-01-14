@@ -141,10 +141,10 @@ class LorenzOscillator:
 
     The oscillator SENSES environmental changes through its dynamics.
     The k_eff metric responds to:
-    - Workload variations (GPU contention)
-    - Thermal changes
-    - EMI (electromagnetic interference)
-    - VDF (voltage/frequency scaling)
+    - Workload variations (GPU contention) [VALIDATED]
+    - Thermal changes [THEORIZED]
+    - EMI (electromagnetic interference) [THEORIZED]
+    - VDF (voltage/frequency scaling) [THEORIZED]
     """
 
     def __init__(self, config: StrainGaugeConfig):
@@ -640,10 +640,11 @@ class StrainGauge:
 
 def emi_mode(duration: int = 30, sample_rate: int = 500):
     """
-    EMI spectrum analysis mode.
+    EMI spectrum analysis mode. [EXPERIMENTAL - NOT YET VALIDATED]
 
-    Detects electromagnetic interference from power grid (60 Hz + harmonics),
-    VRM switching frequencies, and subharmonics.
+    Analyzes timing spectrum for electromagnetic interference signatures.
+    Theorized to detect power grid (60 Hz + harmonics), VRM switching
+    frequencies, and subharmonics. Validation experiments pending.
 
     Args:
         duration: Capture duration in seconds (default 30 for 0.033 Hz resolution)
@@ -652,7 +653,7 @@ def emi_mode(duration: int = 30, sample_rate: int = 500):
     from scipy import signal as scipy_signal
 
     print("=" * 60)
-    print("CIRISOSSICLE: EMI Spectrum Analysis")
+    print("CIRISOSSICLE: EMI Spectrum Analysis [EXPERIMENTAL]")
     print("=" * 60)
     print(f"\nSample rate: {sample_rate} Hz (Nyquist: {sample_rate//2} Hz)")
     print(f"Duration: {duration} seconds")
